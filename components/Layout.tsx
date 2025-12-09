@@ -1,6 +1,8 @@
+
+
 import React from 'react';
 import { View } from '../types';
-import { HomeIcon, WandIcon, BrainIcon, ShieldIcon, TvIcon } from './Icons';
+import { HomeIcon, GamepadIcon, BrainIcon, ShieldIcon, TvIcon } from './Icons';
 
 interface LayoutProps {
   currentView: View;
@@ -48,9 +50,9 @@ export const Layout: React.FC<LayoutProps> = ({ currentView, onNavigate, childre
             color="bg-red-500" 
           />
           <NavItem 
-            view={View.CREATE} 
-            icon={<WandIcon className="w-6 h-6 text-white" />} 
-            label="Create" 
+            view={View.GAMES} 
+            icon={<GamepadIcon className="w-6 h-6 text-white" />} 
+            label="Games" 
             color="bg-pink-500" 
           />
           <NavItem 

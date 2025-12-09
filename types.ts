@@ -1,8 +1,7 @@
 
-
 export enum View {
   FEED = 'FEED',
-  CREATE = 'CREATE',
+  GAMES = 'GAMES',
   CHAT = 'CHAT',
   PARENTS = 'PARENTS',
   TV = 'TV'
@@ -14,11 +13,15 @@ export enum ImageSize {
   S_4K = '4K'
 }
 
+export type WelcomeState = 'HIDDEN' | 'GREETING' | 'FLYING' | 'DONE';
+
 export interface ParentSettings {
   pin: string;
   childName: string;
   childAge: number;
   focusTopics: string[]; // Topics parent wants to encourage
+  avatarName?: string;
+  hasSeenTutorial?: boolean;
 }
 
 export interface ActivityLog {

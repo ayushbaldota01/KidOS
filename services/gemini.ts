@@ -1,6 +1,7 @@
 
+
 import { GoogleGenAI, Type, Modality } from "@google/genai";
-import { ImageSize, LearnVideo, GeneratedVideo, ParentSettings, ActivityLog, Book, Story } from "../types";
+import { ImageSize, LearnVideo, GeneratedVideo, ParentSettings, ActivityLog, Book, Story, View } from "../types";
 
 // Helper to always get a fresh instance with the latest key
 const getAi = () => new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
@@ -142,6 +143,30 @@ export const generateImage = async (
     }
     throw error;
   }
+};
+
+// 4b. Identify Drawing (Multimodal)
+export const identifyDrawing = async (base64Image: string): Promise<string> => {
+    try {
+        const ai = getAi();
+        const mimeType = getMimeType(base64Image);
+        const base64Data = base64Image.split(',')[1] || base64Image;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: {
+                parts: [
+                    { inlineData: { mimeType: mimeType, data: base64Data } },
+                    { text: "What is this a drawing of? Answer in 1 short, cheerful sentence to a 5-year-old child. Be encouraging! Start with 'Is that a...' or 'Wow, it looks like a...'" }
+                ]
+            }
+        });
+
+        return response.text || "Wow, what a beautiful drawing!";
+    } catch (error) {
+        console.error("Identify drawing error:", error);
+        return "That looks amazing! Keep drawing!";
+    }
 };
 
 // 5. Image Editing
@@ -500,6 +525,130 @@ export const generateStory = async (title: string): Promise<Story> => {
     }
 }
 
+// 13. Floating Buddy Helper (Modified for Voice Interaction)
+export const getBuddyMessage = async (context: string, settings: ParentSettings | null, isVoiceQuery: boolean = false): Promise<string> => {
+    try {
+        const ai = getAi();
+        const name = settings?.childName || "Friend";
+        
+        // If it's a direct voice question, treat it like a conversation
+        const prompt = isVoiceQuery 
+            ? `You are Hoot, a friendly owl driving a flying car. 
+               The child (named ${name}) asked you: "${context}". 
+               Answer in 1 sentence. Be encouraging and fun.`
+            : `You are Hoot, a friendly owl driving a flying car. 
+               The child is currently looking at: "${context}".
+               Give a very short, super encouraging, 1-sentence tip or fun comment using the name "${name}".`;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-lite',
+            contents: prompt
+        });
+        return response.text || `Hoot hoot! Doing great, ${name}!`;
+    } catch (e) {
+        return "You're doing great!";
+    }
+}
+
+// 14. Activity Logger
+export const logActivity = (type: ActivityLog['type'], details: string, category: string) => {
+    const log: ActivityLog = {
+        id: Date.now().toString(),
+        type,
+        details,
+        timestamp: Date.now(),
+        category
+    };
+    
+    // Save to local storage for parent zone
+    const existing = localStorage.getItem('activity_logs');
+    const logs: ActivityLog[] = existing ? JSON.parse(existing) : [];
+    logs.unshift(log);
+    // Keep last 50
+    if (logs.length > 50) logs.pop();
+    localStorage.setItem('activity_logs', JSON.stringify(logs));
+}
+
+// 15. Chess Coach
+export const getChessAdvice = async (fen: string): Promise<string> => {
+    try {
+        const ai = getAi();
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: `You are a chess coach for a 7-year-old. 
+            The current board state (simplified representation) is: 
+            ${fen}
+            
+            Suggest ONE simple, good move for White. Explain WHY in 1 very short, simple sentence. 
+            Don't use complex notation. Say things like "Move the knight to protect the king!"`
+        });
+        return response.text || "Try moving your pawns forward to control the center!";
+    } catch (e) {
+        return "Think about controlling the center of the board!";
+    }
+}
+
+// 16. Language Learning
+export const generateLanguageLesson = async (language: string, difficulty: 'Easy' | 'Medium'): Promise<any> => {
+    try {
+        const ai = getAi();
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: `Generate a single language learning card for a child learning ${language} (${difficulty} level).
+            Return JSON with:
+            - phrase (in ${language})
+            - translation (in English)
+            - pronunciation (phonetic guide)
+            - imagePrompt (cute visual description)
+            - voiceInstruction (what the AI assistant should say to the child, e.g. "Can you say 'Hola'?")
+            `,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        phrase: { type: Type.STRING },
+                        translation: { type: Type.STRING },
+                        pronunciation: { type: Type.STRING },
+                        imagePrompt: { type: Type.STRING },
+                        voiceInstruction: { type: Type.STRING }
+                    }
+                }
+            }
+        });
+        return JSON.parse(response.text || '{}');
+    } catch (e) {
+        console.error(e);
+        return { phrase: 'Hola', translation: 'Hello', pronunciation: 'oh-la', imagePrompt: 'Waving hand', voiceInstruction: 'Say Hola!' };
+    }
+}
+
+export const checkPronunciation = async (target: string, spoken: string): Promise<any> => {
+     try {
+        const ai = getAi();
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: `The child was asked to say "${target}". They said "${spoken}".
+            Is this close enough? Return JSON:
+            - correct (boolean)
+            - feedback (short, encouraging sentence for a 5 year old)
+            `,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        correct: { type: Type.BOOLEAN },
+                        feedback: { type: Type.STRING }
+                    }
+                }
+            }
+        });
+        return JSON.parse(response.text || '{}');
+     } catch (e) {
+         return { correct: true, feedback: "Good try!" };
+     }
+}
 
 // --- Helpers ---
 
