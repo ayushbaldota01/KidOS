@@ -134,7 +134,7 @@ export const WelcomeAnimation: React.FC<WelcomeAnimationProps> = ({ onComplete }
                     {/* Title Sequence */}
                     <div className="mb-12 animate-in fade-in slide-in-from-bottom-10 duration-1000">
                         <h1 className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-white to-indigo-300 mb-2 tracking-tight drop-shadow-lg font-serif">
-                            WonderFeed
+                            WonderNest
                         </h1>
                         <p className="text-xl md:text-2xl text-indigo-100 font-medium max-w-lg leading-relaxed drop-shadow-md mx-auto">
                             Explore. Learn. Dream.

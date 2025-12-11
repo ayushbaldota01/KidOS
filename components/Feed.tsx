@@ -206,7 +206,7 @@ export const Feed: React.FC = () => {
       {/* Top Tab Switcher */}
       <div className="bg-white/90 backdrop-blur-md pt-[env(safe-area-inset-top)] px-4 pb-3 shadow-sm z-30 shrink-0">
           <div className="flex justify-between items-center mb-2">
-            <h1 className="text-xl font-black text-slate-800">WonderFeed</h1>
+            <h1 className="text-xl font-black text-slate-800">WonderNest</h1>
           </div>
           <div className="flex bg-slate-100 p-1.5 rounded-full relative">
               <button 
