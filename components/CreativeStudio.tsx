@@ -1,9 +1,10 @@
 
-
 import React, { useState, useRef, useEffect } from 'react';
 import { identifyDrawing, getChessAdvice, generateLanguageLesson, checkPronunciation, generateImage, promptForKey } from '../services/gemini';
 import { PencilIcon, EraserIcon, TrashIcon, DownloadIcon, CircleIcon, SquareIcon, ChessIcon, MathIcon, AbcBlockIcon, SparklesIcon, LightBulbIcon, FillIcon, GamepadIcon, PuzzleIcon, GlobeIcon, VolumeIcon, MicIcon, XIcon, StarIcon } from './Icons';
 import { ImageSize } from '../types';
+import { triggerConfetti, triggerSmallConfetti } from '../services/confetti';
+import { motion } from 'framer-motion';
 
 type Mode = 'DRAW' | 'BUBBLE' | 'MEMORY' | 'MATH_QUEST' | 'WORD_QUEST' | 'CHESS' | 'LANGUAGE';
 type Tool = 'BRUSH' | 'ERASER' | 'FILL' | 'CIRCLE' | 'SQUARE';
@@ -136,6 +137,7 @@ export const CreativeStudio: React.FC = () => {
       try {
           const guess = await identifyDrawing(base64);
           setDrawingGuess(guess);
+          triggerConfetti();
       } catch(e) { console.error(e); }
       setGuessing(false);
   };
@@ -273,7 +275,10 @@ export const CreativeStudio: React.FC = () => {
           setTurns(t => t+1);
           if (flipped[0].content === card.content) {
              playSound('success'); setScore(s => s + 100); setCards(prev => prev.map(c => (c.id === id || c.id === flipped[0].id) ? { ...c, isMatched: true } : c));
-             if (cards.filter(c=>c.isMatched).length + 2 === cards.length) setIsGameWon(true);
+             if (cards.filter(c=>c.isMatched).length + 2 === cards.length) {
+                 setIsGameWon(true);
+                 triggerConfetti();
+             }
           } else {
              playSound('error'); setScore(s => Math.max(0, s - 10));
              setTimeout(() => setCards(prev => prev.map(c => (c.id === id || c.id === flipped[0].id) ? { ...c, isFlipped: false } : c)), 1000);
@@ -307,11 +312,24 @@ export const CreativeStudio: React.FC = () => {
 
   // --- Math Logic ---
   const generateMathProblem = () => { const a = Math.floor(Math.random()*5)+1; const b = Math.floor(Math.random()*5)+1; const ans = a+b; setMathProblem({a,b,ans,op:'+'}); const opts=new Set([ans]); while(opts.size<4) opts.add(Math.floor(Math.random()*10)+1); setMathOptions(Array.from(opts).sort(()=>Math.random()-.5)); setMathFeedback(''); };
-  const handleMathAnswer = (val: number) => { if(val===mathProblem.ans){ playSound('success'); setScore(s=>s+50); setMathFeedback("Correct! 🎉"); setTimeout(generateMathProblem, 1500); }else{ playSound('error'); setScore(s=>Math.max(0, s-10)); setMathFeedback("Try counting again!"); } };
+  const handleMathAnswer = (val: number) => { 
+      if(val===mathProblem.ans){ 
+          playSound('success'); setScore(s=>s+50); setMathFeedback("Correct! 🎉"); 
+          triggerSmallConfetti();
+          setTimeout(generateMathProblem, 1500); 
+      }else{ playSound('error'); setScore(s=>Math.max(0, s-10)); setMathFeedback("Try counting again!"); } 
+    };
 
   // --- Word Logic ---
   const generateWordLevel = () => { const words=[{w:'LION',e:'🦁'},{w:'APPLE',e:'🍎'},{w:'CAR',e:'🚗'},{w:'FISH',e:'🐟'},{w:'MOON',e:'🌙'}]; const t=words[Math.floor(Math.random()*words.length)]; setWordTarget({word:t.w, emoji:t.e}); setWordInput(Array(t.w.length).fill('')); setWordSuccess(false); const letters=t.w.split(''); while(letters.length<8) letters.push(String.fromCharCode(65+Math.floor(Math.random()*26))); setLetterPool(letters.sort(()=>Math.random()-.5)); };
-  const handleLetterClick = (char: string) => { if(wordSuccess)return; const idx=wordInput.findIndex(l=>l===''); if(idx===-1)return; playSound('click'); const newIn=[...wordInput]; newIn[idx]=char; setWordInput(newIn); if(newIn.join('')===wordTarget.word){ playSound('success'); setScore(s=>s+100); setWordSuccess(true); setTimeout(generateWordLevel,2000); }else if(newIn.every(l=>l!=='')){ playSound('error'); setTimeout(()=>setWordInput(Array(wordTarget.word.length).fill('')),500); } };
+  const handleLetterClick = (char: string) => { 
+      if(wordSuccess)return; const idx=wordInput.findIndex(l=>l===''); if(idx===-1)return; playSound('click'); const newIn=[...wordInput]; newIn[idx]=char; setWordInput(newIn); 
+      if(newIn.join('')===wordTarget.word){ 
+          playSound('success'); setScore(s=>s+100); setWordSuccess(true); 
+          triggerConfetti();
+          setTimeout(generateWordLevel,2000); 
+      }else if(newIn.every(l=>l!=='')){ playSound('error'); setTimeout(()=>setWordInput(Array(wordTarget.word.length).fill('')),500); } 
+    };
 
   // --- Language Logic ---
   const startLanguageLesson = async () => {
@@ -346,6 +364,7 @@ export const CreativeStudio: React.FC = () => {
               if (assessment.correct) {
                   playSound('success');
                   setScore(s => s + 50);
+                  triggerSmallConfetti();
               } else {
                   playSound('error');
               }
@@ -359,18 +378,20 @@ export const CreativeStudio: React.FC = () => {
 
   // --- Mode Selector Card Component ---
   const GameCard = ({ m, title, icon, color, bg }: any) => (
-      <button 
+      <motion.button 
+        whileTap={{ scale: 0.95 }}
+        whileHover={{ scale: 1.05 }}
         onClick={() => { setMode(m); playSound('click'); }} 
-        className={`relative aspect-[4/3] rounded-3xl overflow-hidden shadow-lg hover:scale-[1.02] transition-transform group border-4 border-white ${bg}`}
+        className={`relative aspect-[4/3] rounded-3xl overflow-hidden shadow-lg border-4 border-white ${bg}`}
       >
           <div className="absolute inset-0 flex flex-col items-center justify-center text-white z-10">
-              <div className="mb-2 p-3 bg-white/20 rounded-2xl backdrop-blur-sm group-hover:scale-110 transition-transform">
+              <div className="mb-2 p-3 bg-white/20 rounded-2xl backdrop-blur-sm">
                   {icon}
               </div>
               <h3 className="font-black text-xl drop-shadow-md">{title}</h3>
           </div>
           <div className="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors"></div>
-      </button>
+      </motion.button>
   );
 
   return (
@@ -426,12 +447,12 @@ export const CreativeStudio: React.FC = () => {
                                <p className="text-slate-400 font-medium italic mb-8">"{lesson.translation}"</p>
 
                                <div className="grid grid-cols-2 gap-4">
-                                   <button onClick={handleListen} className="py-4 rounded-xl bg-blue-100 text-blue-600 font-bold flex flex-col items-center justify-center gap-2 hover:bg-blue-200 transition-colors">
+                                   <motion.button whileTap={{scale:0.95}} onClick={handleListen} className="py-4 rounded-xl bg-blue-100 text-blue-600 font-bold flex flex-col items-center justify-center gap-2 hover:bg-blue-200 transition-colors">
                                        <VolumeIcon className="w-6 h-6" /> Listen
-                                   </button>
-                                   <button onClick={handleMic} className={`py-4 rounded-xl font-bold flex flex-col items-center justify-center gap-2 transition-all ${isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-green-100 text-green-600 hover:bg-green-200'}`}>
+                                   </motion.button>
+                                   <motion.button whileTap={{scale:0.95}} onClick={handleMic} className={`py-4 rounded-xl font-bold flex flex-col items-center justify-center gap-2 transition-all ${isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-green-100 text-green-600 hover:bg-green-200'}`}>
                                        <MicIcon className="w-6 h-6" /> {isListening ? 'Listening...' : 'Speak'}
-                                   </button>
+                                   </motion.button>
                                </div>
 
                                {feedback && (
@@ -443,9 +464,9 @@ export const CreativeStudio: React.FC = () => {
                        ) : null}
                    </div>
                    
-                   <button onClick={startLanguageLesson} className="mt-8 px-12 py-4 bg-indigo-600 text-white font-bold rounded-full shadow-lg active:scale-95 transition-transform">
+                   <motion.button whileTap={{scale:0.95}} onClick={startLanguageLesson} className="mt-8 px-12 py-4 bg-indigo-600 text-white font-bold rounded-full shadow-lg transition-transform">
                        Next Card →
-                   </button>
+                   </motion.button>
               </div>
           )}
 
@@ -466,23 +487,23 @@ export const CreativeStudio: React.FC = () => {
                     <div className="flex justify-between items-center">
                          <div className="flex gap-2">
                              {['BRUSH', 'FILL', 'CIRCLE', 'SQUARE', 'ERASER'].map(t => (
-                                 <button key={t} onClick={() => { setTool(t as Tool); playSound('click'); }} className={`p-3 rounded-xl transition-all ${tool === t ? 'bg-purple-500 text-white scale-110 shadow-lg' : 'bg-white text-purple-400'}`}>
+                                 <motion.button whileTap={{scale:0.9}} key={t} onClick={() => { setTool(t as Tool); playSound('click'); }} className={`p-3 rounded-xl transition-all ${tool === t ? 'bg-purple-500 text-white scale-110 shadow-lg' : 'bg-white text-purple-400'}`}>
                                      {t === 'BRUSH' && <PencilIcon className="w-6 h-6" />}
                                      {t === 'FILL' && <FillIcon className="w-6 h-6" />}
                                      {t === 'CIRCLE' && <CircleIcon className="w-6 h-6" />}
                                      {t === 'SQUARE' && <SquareIcon className="w-6 h-6" />}
                                      {t === 'ERASER' && <EraserIcon className="w-6 h-6" />}
-                                 </button>
+                                 </motion.button>
                              ))}
                          </div>
                          <div className="flex gap-2">
-                            <button onClick={handleIdentifyDrawing} disabled={guessing} className="p-3 bg-yellow-400 text-black rounded-xl font-bold flex gap-2">{guessing ? '...' : <><LightBulbIcon className="w-6 h-6"/> Guess</>}</button>
-                            <button onClick={clearCanvas} className="p-3 bg-red-100 text-red-500 rounded-xl"><TrashIcon className="w-6 h-6"/></button>
-                            <button onClick={() => {if(canvasRef.current){const l=document.createElement('a');l.download='art.png';l.href=canvasRef.current.toDataURL();l.click();}}} className="p-3 bg-green-100 text-green-600 rounded-xl"><DownloadIcon className="w-6 h-6"/></button>
+                            <motion.button whileTap={{scale:0.95}} onClick={handleIdentifyDrawing} disabled={guessing} className="p-3 bg-yellow-400 text-black rounded-xl font-bold flex gap-2">{guessing ? '...' : <><LightBulbIcon className="w-6 h-6"/> Guess</>}</motion.button>
+                            <motion.button whileTap={{scale:0.95}} onClick={clearCanvas} className="p-3 bg-red-100 text-red-500 rounded-xl"><TrashIcon className="w-6 h-6"/></motion.button>
+                            <motion.button whileTap={{scale:0.95}} onClick={() => {if(canvasRef.current){const l=document.createElement('a');l.download='art.png';l.href=canvasRef.current.toDataURL();l.click();}}} className="p-3 bg-green-100 text-green-600 rounded-xl"><DownloadIcon className="w-6 h-6"/></motion.button>
                          </div>
                     </div>
                     <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-                        {COLORS.map(c => <button key={c} onClick={() => { setColor(c); playSound('click'); }} className={`w-10 h-10 rounded-full border-4 ${color === c ? 'border-purple-500 scale-110' : 'border-transparent'}`} style={{ backgroundColor: c }} />)}
+                        {COLORS.map(c => <motion.button whileTap={{scale:0.9}} key={c} onClick={() => { setColor(c); playSound('click'); }} className={`w-10 h-10 rounded-full border-4 ${color === c ? 'border-purple-500 scale-110' : 'border-transparent'}`} style={{ backgroundColor: c }} />)}
                     </div>
                 </div>
             </div>
@@ -496,7 +517,8 @@ export const CreativeStudio: React.FC = () => {
                               const isBlack = (r + c) % 2 === 1;
                               const isSelected = selectedPos?.r === r && selectedPos?.c === c;
                               return (
-                                  <div 
+                                  <motion.div 
+                                    whileTap={{ scale: 0.9 }}
                                     key={`${r}-${c}`} 
                                     onClick={() => handleChessClick(r, c)}
                                     className={`w-10 h-10 md:w-16 md:h-16 flex items-center justify-center text-3xl md:text-5xl cursor-pointer
@@ -507,7 +529,7 @@ export const CreativeStudio: React.FC = () => {
                                       <span className={['♟','♜','♞','♝','♛','♚'].includes(piece) ? 'text-black drop-shadow-sm' : 'text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]'}>
                                           {piece}
                                       </span>
-                                  </div>
+                                  </motion.div>
                               );
                           }))}
                       </div>
@@ -518,10 +540,10 @@ export const CreativeStudio: React.FC = () => {
                           <div className="min-h-[80px] text-slate-600 text-sm italic bg-slate-50 p-4 rounded-xl border border-slate-100">
                               {chessAdvice || "Click 'Hint' and I'll help you find a great move!"}
                           </div>
-                          <button onClick={getHint} disabled={adviceLoading} className="w-full mt-4 py-3 bg-yellow-400 hover:bg-yellow-500 text-black font-bold rounded-xl shadow-md active:translate-y-1 transition-all flex items-center justify-center gap-2">
+                          <motion.button whileTap={{scale:0.95}} onClick={getHint} disabled={adviceLoading} className="w-full mt-4 py-3 bg-yellow-400 hover:bg-yellow-500 text-black font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2">
                               {adviceLoading ? <SparklesIcon className="animate-spin"/> : <LightBulbIcon />} 
                               {adviceLoading ? 'Analyzing...' : 'Give me a Hint!'}
-                          </button>
+                          </motion.button>
                       </div>
                   </div>
               </div>
@@ -543,9 +565,9 @@ export const CreativeStudio: React.FC = () => {
                    </div>
                    <div className="grid grid-cols-4 gap-4 w-full max-w-2xl">
                        {mathOptions.map((opt, i) => (
-                           <button key={i} onClick={() => handleMathAnswer(opt)} className="py-6 bg-white border-b-4 border-orange-200 hover:border-orange-500 rounded-2xl text-4xl font-black text-slate-700 hover:bg-orange-50 hover:scale-105 transition-all shadow-sm active:border-b-0 active:translate-y-1">
+                           <motion.button whileTap={{scale:0.9}} key={i} onClick={() => handleMathAnswer(opt)} className="py-6 bg-white border-b-4 border-orange-200 hover:border-orange-500 rounded-2xl text-4xl font-black text-slate-700 hover:bg-orange-50 transition-all shadow-sm">
                                {opt}
-                           </button>
+                           </motion.button>
                        ))}
                    </div>
                    <div className="h-10 mt-8 font-bold text-orange-600 text-xl">{mathFeedback}</div>
@@ -563,7 +585,7 @@ export const CreativeStudio: React.FC = () => {
                   </div>
                   <div className="flex flex-wrap justify-center gap-3 max-w-2xl">
                       {letterPool.map((char, i) => (
-                          <button key={i} onClick={() => handleLetterClick(char)} disabled={wordSuccess} className="w-16 h-16 bg-teal-600 text-white rounded-xl text-3xl font-bold shadow-[0_4px_0_rgba(13,148,136,1)] active:shadow-none active:translate-y-1 hover:bg-teal-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed">{char}</button>
+                          <motion.button whileTap={{scale:0.9}} key={i} onClick={() => handleLetterClick(char)} disabled={wordSuccess} className="w-16 h-16 bg-teal-600 text-white rounded-xl text-3xl font-bold shadow-[0_4px_0_rgba(13,148,136,1)] hover:bg-teal-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed">{char}</motion.button>
                       ))}
                   </div>
               </div>
@@ -583,7 +605,7 @@ export const CreativeStudio: React.FC = () => {
                    <div className="flex justify-between mb-6 items-center">
                        <span className="font-bold text-green-800 text-lg">Moves: {turns}</span>
                        <div className="bg-green-600 text-white px-6 py-2 rounded-full font-black text-xl shadow-lg">Score: {score}</div>
-                       <button onClick={() => { setCards([...MEMORY_ICONS, ...MEMORY_ICONS].sort(()=>Math.random()-.5).map((c,i)=>({id:i, content:c, isFlipped:false, isMatched:false}))); setTurns(0); setScore(0); setIsGameWon(false); playSound('click'); }} className="bg-white text-green-600 px-4 py-2 rounded-lg font-bold shadow-md hover:bg-green-50">Restart</button>
+                       <motion.button whileTap={{scale:0.95}} onClick={() => { setCards([...MEMORY_ICONS, ...MEMORY_ICONS].sort(()=>Math.random()-.5).map((c,i)=>({id:i, content:c, isFlipped:false, isMatched:false}))); setTurns(0); setScore(0); setIsGameWon(false); playSound('click'); }} className="bg-white text-green-600 px-4 py-2 rounded-lg font-bold shadow-md hover:bg-green-50">Restart</motion.button>
                    </div>
                    {isGameWon ? (
                        <div className="h-full flex flex-col items-center justify-center animate-in zoom-in">
@@ -594,9 +616,9 @@ export const CreativeStudio: React.FC = () => {
                    ) : (
                        <div className="grid grid-cols-4 sm:grid-cols-5 gap-4">
                            {cards.map(c => (
-                               <button key={c.id} onClick={() => handleCardClick(c.id)} className={`aspect-square rounded-2xl text-4xl shadow-md transition-all transform duration-500 ${c.isFlipped || c.isMatched ? 'bg-white rotate-y-180' : 'bg-green-400 hover:bg-green-500 scale-95'}`}>
+                               <motion.button whileTap={{scale:0.9}} key={c.id} onClick={() => handleCardClick(c.id)} className={`aspect-square rounded-2xl text-4xl shadow-md transition-all transform duration-500 ${c.isFlipped || c.isMatched ? 'bg-white rotate-y-180' : 'bg-green-400 hover:bg-green-500'}`}>
                                    {(c.isFlipped || c.isMatched) ? c.content : <PuzzleIcon className="w-8 h-8 text-green-800 mx-auto opacity-50"/>}
-                               </button>
+                               </motion.button>
                            ))}
                        </div>
                    )}

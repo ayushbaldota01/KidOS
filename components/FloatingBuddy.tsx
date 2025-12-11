@@ -114,92 +114,117 @@ export const FloatingBuddy: React.FC<FloatingBuddyProps> = ({ currentView }) => 
         }
     };
 
-    // --- 3D CSS Styles ---
-    const carGradient = "bg-gradient-to-r from-red-500 via-red-400 to-red-600";
-    const carShadow = "shadow-[0_10px_20px_rgba(0,0,0,0.3),inset_0_2px_5px_rgba(255,255,255,0.4)]";
-    const wheelGradient = "bg-gradient-to-br from-gray-800 to-black";
-
     return (
         <>
             {isActive && <div className="fixed inset-0 bg-black/60 z-[90] backdrop-blur-sm animate-in fade-in duration-300" onClick={toggleActive}></div>}
 
             <div 
-                className={`fixed z-[100] transition-all duration-700 ease-in-out cursor-pointer ${
+                className={`fixed z-[100] transition-all duration-1000 ease-[cubic-bezier(0.34,1.56,0.64,1)] cursor-pointer origin-center ${
                     isActive 
-                    ? 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 scale-[3]' 
-                    : 'top-4 left-4 scale-100 hover:scale-110' 
+                    ? 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 scale-[3.5]' 
+                    : 'bottom-[calc(80px+env(safe-area-inset-bottom)+0.5rem)] left-3 scale-100 hover:scale-110 active:scale-95' 
                 }`}
-                // NOTE: Changed right-4 to left-4 above
                 onClick={!isActive ? toggleActive : undefined}
             >
-                <div className={`relative group perspective-1000 ${animationMode === 'spin' ? 'animate-spin-y' : animationMode === 'excited' ? 'animate-bounce' : 'animate-float'}`}>
+                <div className={`relative group ${animationMode === 'spin' ? 'animate-spin-y' : animationMode === 'excited' ? 'animate-bounce' : 'animate-float'}`}>
                     
                     {/* Message Bubble */}
                     {message && (
-                        <div className={`absolute bottom-full mb-6 left-1/2 -translate-x-1/2 bg-white text-slate-800 p-3 rounded-2xl shadow-xl border-4 border-white min-w-[140px] text-center animate-in fade-in slide-in-from-bottom-2 z-20 ${isActive ? 'text-[6px] leading-tight w-40' : 'text-xs w-32'}`}>
+                        <div className={`absolute bottom-full mb-3 left-0 bg-white text-slate-800 p-3 rounded-2xl rounded-bl-none shadow-[0_8px_20px_rgba(0,0,0,0.15)] border-2 border-slate-100 min-w-[140px] text-left animate-in fade-in slide-in-from-bottom-2 z-40 ${isActive ? 'text-[6px] leading-tight w-32 -translate-y-4' : 'text-xs w-48'}`}>
                             <p className="font-bold">{message}</p>
-                            <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-4 h-4 bg-white transform rotate-45"></div>
                         </div>
                     )}
 
-                    {/* 3D CAR BODY */}
-                    <div className={`relative w-24 h-14 ${carGradient} rounded-2xl rounded-t-lg ${carShadow} flex items-center justify-center transform preserve-3d`}>
-                        {/* Glossy Reflection */}
-                        <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent rounded-t-lg pointer-events-none"></div>
-
-                        {/* Wheels (3D effect) */}
-                        <div className={`absolute -bottom-3 left-2 w-7 h-7 ${wheelGradient} rounded-full border-4 border-gray-600 shadow-lg flex items-center justify-center ${isActive ? 'animate-spin' : ''}`}>
-                            <div className="w-2 h-2 bg-gray-400 rounded-full shadow-inner"></div>
-                        </div>
-                        <div className={`absolute -bottom-3 right-2 w-7 h-7 ${wheelGradient} rounded-full border-4 border-gray-600 shadow-lg flex items-center justify-center ${isActive ? 'animate-spin' : ''}`}>
-                            <div className="w-2 h-2 bg-gray-400 rounded-full shadow-inner"></div>
-                        </div>
-
-                        {/* Headlights */}
-                        <div className="absolute top-3 -left-1 w-2 h-4 bg-yellow-300 rounded-l-full shadow-[0_0_10px_rgba(253,224,71,0.8)] border border-yellow-500"></div>
-                        <div className="absolute top-3 -right-1 w-2 h-4 bg-yellow-300 rounded-r-full shadow-[0_0_10px_rgba(253,224,71,0.8)] border border-yellow-500"></div>
-
-                        {/* HOOT AVATAR (3D Sphere Look) */}
-                        <div className={`absolute bottom-6 left-1/2 -translate-x-1/2 w-14 h-14 bg-gradient-to-br from-indigo-500 via-indigo-600 to-indigo-800 rounded-full border-2 border-indigo-400 shadow-[0_5px_15px_rgba(0,0,0,0.4),inset_0_5px_10px_rgba(255,255,255,0.3)] flex items-center justify-center overflow-hidden transition-transform ${isSpeaking ? 'animate-pulse scale-105' : ''}`}>
-                            {/* Eyes */}
-                            <div className="flex gap-1 mt-1 z-10">
-                                <div className="w-5 h-5 bg-white rounded-full flex items-center justify-center shadow-inner overflow-hidden">
-                                    <div className={`w-3 h-3 bg-black rounded-full transition-transform duration-300 ${isActive ? 'scale-110' : ''}`}>
-                                        <div className="w-1 h-1 bg-white rounded-full absolute top-0.5 right-0.5"></div>
-                                    </div>
-                                </div>
-                                <div className="w-5 h-5 bg-white rounded-full flex items-center justify-center shadow-inner overflow-hidden">
-                                    <div className={`w-3 h-3 bg-black rounded-full transition-transform duration-300 ${isActive ? 'scale-110' : ''}`}>
-                                        <div className="w-1 h-1 bg-white rounded-full absolute top-0.5 right-0.5"></div>
-                                    </div>
-                                </div>
-                            </div>
-                            {/* Beak (3D) */}
-                            <div className="absolute top-7 w-3 h-3 bg-gradient-to-b from-orange-400 to-orange-600 rotate-45 shadow-sm z-10 rounded-sm"></div>
-                            {/* Belly */}
-                            <div className="absolute -bottom-4 w-10 h-10 bg-indigo-300 rounded-full opacity-80"></div>
-                        </div>
+                    {/* COMPOSITE CAR & CHARACTER STRUCTURE */}
+                    <div className="relative w-32 h-24">
                         
-                        {/* Windshield */}
-                         <div className="absolute bottom-5 left-1/2 -translate-x-1/2 w-16 h-8 bg-blue-300/30 rounded-t-full border-t border-white/40 backdrop-blur-[1px]"></div>
+                        {/* 1. BACK WHEELS (Behind body) */}
+                        <div className={`absolute bottom-1 right-6 w-7 h-7 bg-black rounded-full border-4 border-slate-700 shadow-lg z-0 ${isActive ? 'animate-spin-slow' : ''}`}>
+                             <div className="w-2 h-2 bg-slate-400 rounded-full m-auto mt-1.5"></div>
+                        </div>
+
+                        {/* 2. INTERIOR/BACK SEAT (Behind Hoot) */}
+                        <div className="absolute bottom-6 left-4 w-20 h-12 bg-red-900 rounded-t-2xl z-0 border-2 border-red-800 shadow-inner"></div>
+
+                        {/* 3. HOOT (SITTING) - Pops up when active */}
+                        <div className={`absolute bottom-8 left-6 w-14 h-14 z-10 transition-all duration-700 ease-out ${isActive ? '-translate-y-3 scale-110' : ''} ${isSpeaking ? 'animate-pulse' : ''}`}>
+                             {/* Body/Head */}
+                             <div className="w-full h-full bg-indigo-600 rounded-full border-[3px] border-indigo-400 shadow-inner flex items-center justify-center relative">
+                                  {/* Eyes */}
+                                  <div className="flex gap-1.5 -mt-2">
+                                      <div className="w-4 h-4 bg-white rounded-full flex items-center justify-center shadow-sm">
+                                          <div className={`w-2 h-2 bg-black rounded-full transition-transform ${isActive ? 'scale-125' : ''}`}>
+                                              <div className="absolute top-0.5 right-0.5 w-0.5 h-0.5 bg-white rounded-full"></div>
+                                          </div>
+                                      </div>
+                                      <div className="w-4 h-4 bg-white rounded-full flex items-center justify-center shadow-sm">
+                                          <div className={`w-2 h-2 bg-black rounded-full transition-transform ${isActive ? 'scale-125' : ''}`}>
+                                              <div className="absolute top-0.5 right-0.5 w-0.5 h-0.5 bg-white rounded-full"></div>
+                                          </div>
+                                      </div>
+                                  </div>
+                                  {/* Beak */}
+                                  <div className="absolute top-8 w-2 h-2 bg-orange-400 rotate-45 rounded-[1px] shadow-sm"></div>
+                                  {/* Tummy (Visible Part) */}
+                                  <div className="absolute bottom-1 w-8 h-4 bg-indigo-300 rounded-t-full opacity-60"></div>
+                             </div>
+                        </div>
+
+                        {/* 4. CAR BODY FRONT (Masks Hoot's lower half) */}
+                        <div className="absolute bottom-3 left-0 w-full h-12 bg-gradient-to-b from-red-500 to-red-700 rounded-2xl shadow-[0_4px_10px_rgba(0,0,0,0.3)] z-20 flex items-center overflow-hidden border-t border-white/20">
+                             {/* Reflection Highlight */}
+                             <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/30 to-transparent pointer-events-none"></div>
+                             
+                             {/* Headlight */}
+                             <div className={`absolute top-3 right-1 w-2 h-5 bg-yellow-300 rounded-l-full shadow-[0_0_8px_rgba(253,224,71,0.9)] border border-yellow-500 ${isActive ? 'animate-pulse' : ''}`}></div>
+                             
+                             {/* Door Handle */}
+                             <div className="absolute top-4 left-10 w-4 h-1 bg-red-900/50 rounded-full"></div>
+                             
+                             {/* License Plate (Tiny detail) */}
+                             <div className="absolute bottom-2 right-8 w-6 h-2 bg-yellow-400 rounded-[1px] opacity-80"></div>
+                        </div>
+
+                        {/* 5. WINDSHIELD */}
+                        <div className="absolute bottom-11 right-6 w-14 h-8 bg-blue-300/40 border-2 border-white/40 rounded-tr-2xl skew-x-[-15deg] backdrop-blur-[1px] z-10">
+                            {/* Reflection on windshield */}
+                            <div className="absolute top-1 right-2 w-8 h-1 bg-white/40 rotate-[-15deg] rounded-full"></div>
+                        </div>
+
+                        {/* 6. STEERING WHEEL */}
+                        <div className={`absolute bottom-10 right-10 w-1 h-6 bg-black/70 rotate-[-20deg] z-10 origin-bottom ${isActive ? 'rotate-[-30deg]' : 'rotate-[-20deg]'} transition-transform duration-1000`}>
+                            <div className="absolute -top-3 -left-3 w-7 h-7 rounded-full border-[3px] border-black/80"></div>
+                        </div>
+
+                        {/* 7. HOOT'S WING (Resting on door) */}
+                        <div className={`absolute bottom-12 left-2 w-5 h-4 bg-indigo-700 rounded-full rotate-[-15deg] z-30 shadow-sm border border-indigo-500 transition-all duration-700 ${isActive ? '-translate-y-2 -rotate-[45deg]' : ''}`}></div>
+
+                        {/* 8. FRONT WHEELS */}
+                        <div className={`absolute bottom-0 left-4 w-9 h-9 bg-black rounded-full border-[4px] border-slate-700 shadow-xl z-30 flex items-center justify-center ${isActive ? 'animate-spin-slow' : ''}`}>
+                             <div className="w-3 h-3 bg-slate-400 rounded-full shadow-inner"></div>
+                        </div>
+                        <div className={`absolute bottom-0 right-4 w-9 h-9 bg-black rounded-full border-[4px] border-slate-700 shadow-xl z-30 flex items-center justify-center ${isActive ? 'animate-spin-slow' : ''}`}>
+                             <div className="w-3 h-3 bg-slate-400 rounded-full shadow-inner"></div>
+                        </div>
+
                     </div>
                 </div>
 
                 {isActive && (
-                    <div className="absolute top-24 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 animate-in fade-in slide-in-from-top-4">
+                    <div className="absolute top-32 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 animate-in fade-in slide-in-from-top-4 w-max z-[100]">
                         <button 
                             onClick={toggleListening}
-                            className={`w-16 h-16 rounded-full flex items-center justify-center shadow-[0_10px_30px_rgba(0,0,0,0.3)] border-4 border-white transition-all hover:scale-110 active:scale-95 ${isListening ? 'bg-red-500 animate-pulse' : 'bg-gradient-to-br from-indigo-500 to-indigo-700'}`}
+                            className={`w-12 h-12 rounded-full flex items-center justify-center shadow-[0_10px_30px_rgba(0,0,0,0.3)] border-[3px] border-white transition-all hover:scale-110 active:scale-95 ${isListening ? 'bg-red-500 animate-pulse' : 'bg-gradient-to-br from-indigo-500 to-indigo-700'}`}
                         >
-                            <MicIcon className="w-8 h-8 text-white" />
+                            <MicIcon className="w-6 h-6 text-white" />
                         </button>
-                        {isListening && <p className="text-[8px] text-white font-bold bg-black/50 px-3 py-1 rounded-full backdrop-blur-md">I'm Listening...</p>}
+                        {isListening && <p className="text-[6px] text-white font-bold bg-black/50 px-2 py-0.5 rounded-full backdrop-blur-md">Listening...</p>}
                         
                         <button 
                             onClick={(e) => { e.stopPropagation(); toggleActive(); }}
-                            className="mt-4 text-[8px] font-bold text-white/80 hover:text-white bg-white/20 px-4 py-2 rounded-full hover:bg-white/30 transition-colors"
+                            className="mt-2 text-[6px] font-bold text-white/80 hover:text-white bg-white/20 px-3 py-1 rounded-full hover:bg-white/30 transition-colors"
                         >
-                            Close Hoot
+                            Close
                         </button>
                     </div>
                 )}

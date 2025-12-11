@@ -11,7 +11,10 @@
   "dependencies": {
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
-    "@google/genai": "^1.31.0"
+    "@google/genai": "^1.31.0",
+    "lucide-react": "^0.560.0",
+    "framer-motion": "^11.0.8",
+    "canvas-confetti": "^1.9.2"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

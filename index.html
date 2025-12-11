@@ -2,12 +2,31 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>WonderFeed</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-      @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;600&family=Nunito:wght@400;700&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;600;700&family=Nunito:wght@400;700;900&display=swap');
       
+      :root {
+        --sat: env(safe-area-inset-top);
+        --sab: env(safe-area-inset-bottom);
+        --sal: env(safe-area-inset-left);
+        --sar: env(safe-area-inset-right);
+      }
+
+      html, body, #root {
+        height: 100%;
+        height: 100dvh; /* Dynamic viewport height for mobile browsers */
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden; /* Prevent body scroll, handle inside components */
+        overscroll-behavior-y: none; /* Prevent rubber banding */
+        -webkit-tap-highlight-color: transparent; /* Remove blue highlight on tap */
+        touch-action: pan-x pan-y;
+      }
+
       body {
         font-family: 'Nunito', sans-serif;
         background-color: #f0f9ff;
@@ -15,7 +34,8 @@
       h1, h2, h3, h4, button {
         font-family: 'Fredoka', sans-serif;
       }
-      /* Hide scrollbar for clean UI */
+      
+      /* Hide scrollbar for clean UI but allow scrolling */
       .no-scrollbar::-webkit-scrollbar {
         display: none;
       }
@@ -30,7 +50,10 @@
     "react/": "https://aistudiocdn.com/react@^19.2.1/",
     "react": "https://aistudiocdn.com/react@^19.2.1",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.31.0"
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.31.0",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.560.0",
+    "framer-motion": "https://aistudiocdn.com/framer-motion@^11.0.8",
+    "canvas-confetti": "https://aistudiocdn.com/canvas-confetti@^1.9.2"
   }
 }
 </script>

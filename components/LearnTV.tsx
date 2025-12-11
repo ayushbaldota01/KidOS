@@ -1,8 +1,10 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { generateLearnTopics, generateRelatedTopics, generateImage, generateLessonScript, generateSpeech, getWavUrl, promptForKey } from '../services/gemini';
 import { LearnVideo, ImageSize, ParentSettings } from '../types';
 import { TvIcon, PlayIcon, PauseIcon, SparklesIcon, GlobeIcon } from './Icons';
+import { VideoGridSkeleton } from './SkeletonLoader';
+import { motion } from 'framer-motion';
 
 type PlayerState = 'IDLE' | 'GENERATING' | 'READY' | 'PLAYING' | 'PAUSED' | 'ENDED' | 'ERROR';
 type ViewMode = 'AI' | 'DOCS';
@@ -59,6 +61,54 @@ const REAL_DOCS: Documentary[] = [
         searchQuery: 'Elephant family documentary for kids'
     }
 ];
+
+// --- Memoized Components ---
+const VideoItem = React.memo(({ video, onClick }: { video: LearnVideo, onClick: (v: LearnVideo) => void }) => (
+    <motion.div 
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        onClick={() => onClick(video)} 
+        className="bg-slate-900 rounded-2xl overflow-hidden cursor-pointer shadow-lg group border border-slate-800"
+    >
+        <div className="aspect-video bg-slate-800 relative overflow-hidden">
+            {video.thumbnailUrl ? (
+                <img src={video.thumbnailUrl} alt={video.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+            ) : (
+                <div className="w-full h-full flex items-center justify-center text-slate-600 animate-pulse"><SparklesIcon className="w-8 h-8 opacity-50" /></div>
+            )}
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
+                <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-xl transform scale-0 group-hover:scale-100 transition-transform"><PlayIcon className="w-5 h-5 text-black ml-1" /></div>
+            </div>
+        </div>
+        <div className="p-4">
+            <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-1 block">{video.category}</span>
+            <h3 className="text-lg font-bold leading-tight mb-2 text-slate-100">{video.title}</h3>
+        </div>
+    </motion.div>
+));
+
+const DocItem = React.memo(({ doc, onClick }: { doc: Documentary, onClick: (d: Documentary) => void }) => (
+    <motion.div 
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        onClick={() => onClick(doc)} 
+        className="bg-slate-900 rounded-2xl overflow-hidden cursor-pointer shadow-lg group border border-slate-800"
+    >
+        <div className="aspect-[16/10] bg-slate-800 relative">
+            <img src={doc.imageUrl} className="w-full h-full object-cover" alt={doc.title} />
+            <div className="absolute top-2 right-2 bg-black/60 text-white text-[10px] font-bold px-2 py-1 rounded-md backdrop-blur-md">REAL DOC</div>
+            <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+                <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center group-hover:scale-110 transition-transform border-2 border-white/50">
+                    <PlayIcon className="w-6 h-6 text-white ml-1" />
+                </div>
+            </div>
+        </div>
+        <div className="p-5">
+            <h3 className="text-xl font-bold text-white mb-2">{doc.title}</h3>
+            <p className="text-slate-400 text-sm leading-relaxed">{doc.description}</p>
+        </div>
+    </motion.div>
+));
 
 export const LearnTV: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('AI');
@@ -120,7 +170,7 @@ export const LearnTV: React.FC = () => {
     }
   }, [currentTime, duration, activeVideo]);
 
-  const handleStartGeneration = async (video: LearnVideo) => {
+  const handleStartGeneration = useCallback(async (video: LearnVideo) => {
     setActiveVideo(video);
     setPlayerState('GENERATING');
     setShowRecs(false);
@@ -157,7 +207,7 @@ export const LearnTV: React.FC = () => {
         if (e.toString().includes('403') || e.toString().includes('permission')) { setNeedsKey(true); setPlayerState('ERROR'); } 
         else { alert("Something went wrong."); closePlayer(); }
     }
-  };
+  }, [audioUrl]);
 
   const connectAccount = async () => { await promptForKey(); if (activeVideo) handleStartGeneration(activeVideo); };
 
@@ -187,10 +237,10 @@ export const LearnTV: React.FC = () => {
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => { const time = parseFloat(e.target.value); if (audioRef.current) { audioRef.current.currentTime = time; setCurrentTime(time); } };
 
-  const handleDocClick = (doc: Documentary) => {
+  const handleDocClick = useCallback((doc: Documentary) => {
       // Open safe search for documentary
       window.open(`https://www.google.com/search?q=${encodeURIComponent(doc.searchQuery)}&tbm=vid`, '_blank');
-  };
+  }, []);
 
   return (
     <div className="h-full bg-slate-950 text-white flex flex-col relative overflow-hidden font-sans">
@@ -209,17 +259,15 @@ export const LearnTV: React.FC = () => {
         {viewMode === 'AI' && (
             <>
                 {loading && videos.length === 0 ? (
-                    <div className="h-64 flex items-center justify-center flex-col gap-4">
-                        <div className="relative">
-                            <div className="w-16 h-16 border-4 border-slate-700 rounded-full animate-spin"></div>
-                            <div className="absolute top-0 left-0 w-16 h-16 border-4 border-red-500 border-t-transparent rounded-full animate-spin"></div>
-                        </div>
-                        <p className="text-slate-400 font-bold animate-pulse">Curating shows for you...</p>
-                    </div>
+                   <VideoGridSkeleton />
                 ) : (
                     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
                         {videos.length > 0 && (
-                            <div onClick={() => handleStartGeneration(videos[0])} className="relative h-64 md:h-80 w-full rounded-3xl overflow-hidden shadow-2xl cursor-pointer group ring-4 ring-transparent hover:ring-red-500 transition-all">
+                            <motion.div 
+                                whileTap={{ scale: 0.98 }}
+                                onClick={() => handleStartGeneration(videos[0])} 
+                                className="relative h-64 md:h-80 w-full rounded-3xl overflow-hidden shadow-2xl cursor-pointer group ring-4 ring-transparent hover:ring-red-500 transition-all"
+                            >
                                 {videos[0].thumbnailUrl ? (
                                     <img src={videos[0].thumbnailUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                                 ) : (
@@ -232,26 +280,11 @@ export const LearnTV: React.FC = () => {
                                     <p className="text-slate-200 line-clamp-1 opacity-90">{videos[0].description}</p>
                                     <div className="mt-4 flex items-center gap-2 text-sm font-bold text-white/80"><PlayIcon className="w-5 h-5 fill-current" /><span>Tap to Watch</span></div>
                                 </div>
-                            </div>
+                            </motion.div>
                         )}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {videos.slice(1).map((video) => (
-                                <div key={video.id} onClick={() => handleStartGeneration(video)} className="bg-slate-900 rounded-2xl overflow-hidden cursor-pointer hover:bg-slate-800 transition-colors shadow-lg group border border-slate-800">
-                                    <div className="aspect-video bg-slate-800 relative overflow-hidden">
-                                        {video.thumbnailUrl ? (
-                                            <img src={video.thumbnailUrl} alt={video.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                                        ) : (
-                                            <div className="w-full h-full flex items-center justify-center text-slate-600 animate-pulse"><SparklesIcon className="w-8 h-8 opacity-50" /></div>
-                                        )}
-                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
-                                            <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-xl transform scale-0 group-hover:scale-100 transition-transform"><PlayIcon className="w-5 h-5 text-black ml-1" /></div>
-                                        </div>
-                                    </div>
-                                    <div className="p-4">
-                                        <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-1 block">{video.category}</span>
-                                        <h3 className="text-lg font-bold leading-tight mb-2 text-slate-100">{video.title}</h3>
-                                    </div>
-                                </div>
+                                <VideoItem key={video.id} video={video} onClick={handleStartGeneration} />
                             ))}
                         </div>
                     </div>
@@ -271,21 +304,7 @@ export const LearnTV: React.FC = () => {
 
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                      {REAL_DOCS.map((doc) => (
-                         <div key={doc.id} onClick={() => handleDocClick(doc)} className="bg-slate-900 rounded-2xl overflow-hidden cursor-pointer hover:bg-slate-800 transition-all hover:scale-[1.02] shadow-lg group border border-slate-800">
-                              <div className="aspect-[16/10] bg-slate-800 relative">
-                                  <img src={doc.imageUrl} className="w-full h-full object-cover" alt={doc.title} />
-                                  <div className="absolute top-2 right-2 bg-black/60 text-white text-[10px] font-bold px-2 py-1 rounded-md backdrop-blur-md">REAL DOC</div>
-                                  <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors flex items-center justify-center">
-                                       <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center group-hover:scale-110 transition-transform border-2 border-white/50">
-                                            <PlayIcon className="w-6 h-6 text-white ml-1" />
-                                       </div>
-                                  </div>
-                              </div>
-                              <div className="p-5">
-                                  <h3 className="text-xl font-bold text-white mb-2">{doc.title}</h3>
-                                  <p className="text-slate-400 text-sm leading-relaxed">{doc.description}</p>
-                              </div>
-                         </div>
+                         <DocItem key={doc.id} doc={doc} onClick={handleDocClick} />
                      ))}
                  </div>
              </div>
@@ -334,9 +353,14 @@ export const LearnTV: React.FC = () => {
 
                   {playerState === 'READY' && (
                       <div className="z-10 flex flex-col items-center animate-bounce-in">
-                           <button onClick={handlePlayFromReady} className="w-24 h-24 bg-red-600 hover:bg-red-700 text-white rounded-full flex items-center justify-center shadow-[0_0_40px_rgba(220,38,38,0.6)] transition-all hover:scale-110">
+                           <motion.button 
+                                whileTap={{ scale: 0.9 }}
+                                whileHover={{ scale: 1.1 }}
+                                onClick={handlePlayFromReady} 
+                                className="w-24 h-24 bg-red-600 hover:bg-red-700 text-white rounded-full flex items-center justify-center shadow-[0_0_40px_rgba(220,38,38,0.6)]"
+                            >
                                <PlayIcon className="w-10 h-10 ml-2" />
-                           </button>
+                           </motion.button>
                            <h2 className="mt-6 text-2xl font-black text-white">Tap to Watch!</h2>
                       </div>
                   )}
@@ -366,13 +390,18 @@ export const LearnTV: React.FC = () => {
                           ) : (
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl">
                                   {relatedVideos.map((video) => (
-                                      <div key={video.id} onClick={() => handleStartGeneration(video)} className="bg-slate-800/80 backdrop-blur-md rounded-2xl overflow-hidden cursor-pointer hover:bg-slate-700 transition-all hover:scale-105 border border-slate-700">
+                                      <motion.div 
+                                        whileTap={{ scale: 0.95 }}
+                                        key={video.id} 
+                                        onClick={() => handleStartGeneration(video)} 
+                                        className="bg-slate-800/80 backdrop-blur-md rounded-2xl overflow-hidden cursor-pointer hover:bg-slate-700 transition-all border border-slate-700"
+                                      >
                                           <div className="aspect-video bg-slate-900 relative">
                                               {video.thumbnailUrl && <img src={video.thumbnailUrl} alt={video.title} className="w-full h-full object-cover" />}
                                               <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black/40"><PlayIcon className="w-10 h-10 text-white" /></div>
                                           </div>
                                           <div className="p-4"><h4 className="font-bold text-white leading-snug mb-1">{video.title}</h4></div>
-                                      </div>
+                                      </motion.div>
                                   ))}
                               </div>
                           )}

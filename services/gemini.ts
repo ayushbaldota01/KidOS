@@ -1,10 +1,21 @@
 
-
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { ImageSize, LearnVideo, GeneratedVideo, ParentSettings, ActivityLog, Book, Story, View } from "../types";
 
 // Helper to always get a fresh instance with the latest key
 const getAi = () => new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+
+// Simple in-memory cache
+const memoryCache = new Map<string, any>();
+
+const getFromCache = (key: string) => memoryCache.get(key);
+const setInCache = (key: string, value: any) => {
+    if (memoryCache.size > 50) {
+        const firstKey = memoryCache.keys().next().value;
+        if (firstKey) memoryCache.delete(firstKey);
+    }
+    memoryCache.set(key, value);
+};
 
 // Helper to extract mime type
 const getMimeType = (base64: string) => {
@@ -12,52 +23,78 @@ const getMimeType = (base64: string) => {
     return match ? match[1] : 'image/png';
 };
 
-// 1. Fast Content Generation (Feed)
-export const generateFunFact = async (topic: string, settings?: ParentSettings): Promise<string> => {
+interface IBLMParams {
+    difficulty?: 'EASY' | 'MEDIUM' | 'HARD';
+    category?: 'STANDARD' | 'HIGH_ENERGY' | 'CALM';
+}
+
+// 1. Fast Content Generation (Feed) - ADAPTED FOR IBLM
+export const generateFunFact = async (
+    topic: string, 
+    settings?: ParentSettings,
+    iblmParams?: IBLMParams
+): Promise<string> => {
+  // We incorporate IBLM params into the cache key so different states get different content
+  const cacheKey = `fact-${topic}-${settings?.childAge || 'def'}-${iblmParams?.difficulty || 'med'}-${iblmParams?.category || 'std'}`;
+  const cached = getFromCache(cacheKey);
+  if (cached) return cached;
+
   try {
     const ai = getAi();
-    // Personalize prompt if settings exist
     const ageContext = settings ? `for a ${settings.childAge}-year-old named ${settings.childName}` : 'for a 5-year-old';
     
+    // IBLM Logic Injection
+    let styleInstruction = "Write a very short, fun, and simple educational fact.";
+    if (iblmParams?.difficulty === 'EASY') {
+        styleInstruction = "Write an extremely simple, 1-sentence fact. Use very basic words. Make it sound like a joke.";
+    } else if (iblmParams?.difficulty === 'HARD') {
+        styleInstruction = "Write a fascinating, slightly complex fact with a scientific detail. 2 sentences.";
+    }
+
+    let topicModifier = "";
+    if (iblmParams?.category === 'HIGH_ENERGY') {
+        topicModifier = "Make it sound EXCITING and EXPLOSIVE! Use exclamation marks!";
+    } else if (iblmParams?.category === 'CALM') {
+        topicModifier = "Make it sound soothing and gentle.";
+    }
+
+    // Use Flash Lite for speed
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-lite',
-      contents: `Write a very short, fun, and simple educational fact ${ageContext} about: ${topic}. Max 30 words. Keep it exciting!`,
+      contents: `${styleInstruction} ${topicModifier} ${ageContext} about: ${topic}. Max 30 words.`,
     });
-    return response.text || "Did you know learning is fun?";
+    const text = response.text || "Did you know learning is fun?";
+    setInCache(cacheKey, text);
+    return text;
   } catch (error) {
     console.error("Fast gen error:", error);
     return "Learning is super cool!";
   }
 };
 
-// 2. Complex Reasoning (Chatbot)
+// 2. Complex Reasoning (Chatbot) - OPTIMIZED FOR SPEED
 export const askProfessor = async (question: string): Promise<{ text: string, imageUrl?: string | null }> => {
   try {
     const ai = getAi();
     
-    // Parallel execution: Text (Thinking) & Image Prompt (Flash)
+    // Optimization: Run Text and Image generation in PARALLEL.
+    
     const textPromise = ai.models.generateContent({
-      model: 'gemini-3-pro-preview', 
+      model: 'gemini-2.5-flash', 
       contents: question,
       config: {
         systemInstruction: "You are Professor Hoot, a wise and friendly owl teaching children. Answer the question in a very simple, visual, and storytelling way. Use simple words. Use Emojis 🌟. Focus on colors, shapes, and feelings. Keep it short (3-4 sentences).",
-        thinkingConfig: { thinkingBudget: 2048 }
       },
     });
 
-    const promptPromise = ai.models.generateContent({
-        model: 'gemini-2.5-flash-lite',
-        contents: `Create a simple, cute, colorful 3D render image prompt to explain this question to a 4 year old child: "${question}". Keep it under 20 words.`
-    });
+    // Use Flash Image directly with the user question + style modifier
+    const imagePromise = generateImage(
+        `Cute, colorful 3D render illustration explaining: ${question}. Bright colors, soft lighting, Pixar style.`, 
+        ImageSize.S_1K, 
+        'gemini-2.5-flash-image'
+    );
 
-    // Wait for prompt, then generate image
-    const imageGenerationPromise = promptPromise.then(async (res) => {
-        const prompt = res.text || question;
-        // Use Flash Image for speed in chat
-        return generateImage(prompt, ImageSize.S_1K, 'gemini-2.5-flash-image');
-    });
-
-    const [textResponse, imageUrl] = await Promise.all([textPromise, imageGenerationPromise]);
+    const [textResponse, imageUrl] = await Promise.all([textPromise, imagePromise]);
 
     return {
         text: textResponse.text || "Hoot hoot! I'm thinking...",
@@ -92,21 +129,24 @@ export const searchCurriculum = async (query: string) => {
   }
 };
 
-// 4. Image Generation
+// 4. Image Generation - CACHED
 export const generateImage = async (
     prompt: string, 
     size: ImageSize, 
-    modelName: string = 'gemini-3-pro-image-preview'
+    modelName: string = 'gemini-2.5-flash-image' // Default to fast model
 ): Promise<string | null> => {
+  const cacheKey = `img-${modelName}-${prompt}`;
+  const cached = getFromCache(cacheKey);
+  if (cached) return cached;
+
   try {
     const ai = getAi();
     
-    // Construct config dynamically based on model capabilities
     const imageConfig: any = {
         aspectRatio: "1:1"
     };
 
-    // ONLY add imageSize for the Pro model. Flash Image DOES NOT support it.
+    // Only set imageSize for Pro models, Flash Image doesn't support it in the same way or defaults effectively.
     if (modelName === 'gemini-3-pro-image-preview') {
         imageConfig.imageSize = size;
     }
@@ -114,7 +154,7 @@ export const generateImage = async (
     const response = await ai.models.generateContent({
       model: modelName,
       contents: {
-        parts: [{ text: `A cute, child-friendly 3D render illustration of: ${prompt}. Bright colors, soft lighting, Pixar style.` }],
+        parts: [{ text: prompt }],
       },
       config: {
         imageConfig: imageConfig
@@ -123,7 +163,9 @@ export const generateImage = async (
 
     for (const part of response.candidates?.[0]?.content?.parts || []) {
       if (part.inlineData) {
-        return `data:image/png;base64,${part.inlineData.data}`;
+        const res = `data:image/png;base64,${part.inlineData.data}`;
+        setInCache(cacheKey, res);
+        return res;
       }
     }
     return null;
@@ -131,12 +173,10 @@ export const generateImage = async (
     console.error(`Image gen error (${modelName}):`, error);
     
     const errStr = error.toString();
-    // Rethrow permission errors so UI can handle them
     if (errStr.includes('403') || errStr.includes('permission') || errStr.includes('API key')) {
         throw error;
     }
 
-    // Fallback logic: If Pro fails (e.g. invalid param or other 400), try Flash
     if (modelName === 'gemini-3-pro-image-preview') {
         console.log("Falling back to Flash Image...");
         return generateImage(prompt, size, 'gemini-2.5-flash-image');
@@ -171,321 +211,74 @@ export const identifyDrawing = async (base64Image: string): Promise<string> => {
 
 // 5. Image Editing
 export const editImage = async (base64Image: string, instruction: string): Promise<string | null> => {
-  try {
-    const ai = getAi();
-    const mimeType = getMimeType(base64Image);
-    const base64Data = base64Image.split(',')[1] || base64Image;
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
-      contents: {
-        parts: [
-          { inlineData: { mimeType: mimeType, data: base64Data } },
-          { text: instruction }
-        ]
-      }
-    });
-
-    for (const part of response.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData) {
-        return `data:image/png;base64,${part.inlineData.data}`;
-      }
-    }
-    return null;
-  } catch (error) {
-    console.error("Image edit error:", error);
-    throw error;
-  }
-};
-
-// 6. LearnTV: Topic Generation
-export const generateLearnTopics = async (settings?: ParentSettings): Promise<LearnVideo[]> => {
-  try {
-    const ai = getAi();
-    
-    let prompt = "Generate 6 unique, highly engaging educational video topics for kids (3-7yo).";
-    if (settings && settings.focusTopics.length > 0) {
-        prompt += ` STRICTLY prioritize these interests: ${settings.focusTopics.join(', ')}.`;
-        prompt += ` Adjust content for a ${settings.childAge} year old.`;
-    }
-    prompt += " Topics can also include: Space, Animals, How Things Work, Nature, Science. Ensure titles are short and catchy.";
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              title: { type: Type.STRING },
-              description: { type: Type.STRING, description: "A catchy 2-sentence teaser." },
-              category: { type: Type.STRING },
-            }
-          }
-        }
-      }
-    });
-
-    const data = JSON.parse(response.text || '[]');
-    return data.map((item: any, index: number) => ({
-      ...item,
-      id: `topic-${Date.now()}-${index}`
-    }));
-  } catch (error) {
-    console.error("Topic gen error:", error);
-    return [
-      { id: '1', title: 'Why is the sky blue?', description: 'Discover the colors of the sky!', category: 'Science' },
-    ];
-  }
-};
-
-// 6b. LearnTV: Related Topics
-export const generateRelatedTopics = async (currentTopic: string): Promise<LearnVideo[]> => {
-    try {
-      const ai = getAi();
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: `Generate 3 unique, engaging educational video topics for kids (3-7yo) that are related to: "${currentTopic}".`,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                title: { type: Type.STRING },
-                description: { type: Type.STRING },
-                category: { type: Type.STRING },
-              }
-            }
-          }
-        }
-      });
-  
-      const data = JSON.parse(response.text || '[]');
-      return data.map((item: any, index: number) => ({
-        ...item,
-        id: `related-${Date.now()}-${index}`
-      }));
-    } catch (error) {
-      return [];
-    }
-  };
-
-// 7. LearnTV: Lesson Script + Visuals (Slideshow Logic)
-export const generateLessonScript = async (topic: string): Promise<{ script: string, visualPrompts: string[] }> => {
-  try {
-    const ai = getAi();
-    // Return structured JSON with script AND visual prompts for slideshow
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
-      contents: `Create a captivating educational content package for a 5-year-old about "${topic}".
-      
-      Requirements:
-      1. 'script': A spoken-word script (approx 250-300 words). Warm, energetic narrator. NO stage directions.
-      2. 'visualPrompts': An array of EXACTLY 5 distinct, simple image descriptions that illustrate the story progression (Start, Middle, End).`,
-      config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                  script: { type: Type.STRING },
-                  visualPrompts: { 
-                      type: Type.ARRAY, 
-                      items: { type: Type.STRING } 
-                  }
-              }
-          },
-          thinkingConfig: { thinkingBudget: 2048 }
-      }
-    });
-    
-    const data = JSON.parse(response.text || '{}');
-    let script = data.script || `Today we learn about ${topic}`;
-    // Cleanup script just in case
-    script = script.replace(/\[.*?\]/g, '').replace(/\*.*?\*/g, '').replace(/\(.*?\)/g, '');
-    
-    return {
-        script: script,
-        visualPrompts: data.visualPrompts || [`Illustration of ${topic}`]
-    };
-  } catch (error) {
-    console.error("Script gen error", error);
-    return {
-        script: `Welcome! Today let's explore ${topic}. It is going to be amazing.`,
-        visualPrompts: [`${topic} illustration`]
-    };
-  }
-};
-
-// 8. TTS Generation
-export const generateSpeech = async (text: string): Promise<Uint8Array> => {
     try {
         const ai = getAi();
+        const mimeType = getMimeType(base64Image);
+        const base64Data = base64Image.split(',')[1] || base64Image;
+
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash-preview-tts",
-            contents: [{ parts: [{ text }] }],
-            config: {
-                responseModalities: [Modality.AUDIO],
-                speechConfig: {
-                    voiceConfig: {
-                        prebuiltVoiceConfig: { voiceName: 'Kore' },
-                    },
-                },
-            },
+            model: 'gemini-2.5-flash-image',
+            contents: {
+                parts: [
+                    { inlineData: { mimeType: mimeType, data: base64Data } },
+                    { text: instruction }
+                ]
+            }
         });
-        
-        const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-        if (!base64Audio) throw new Error("No audio generated");
-        return decode(base64Audio);
-    } catch (error) {
-        console.error("TTS error:", error);
-        throw error;
-    }
-}
 
-// 9. Veo Video Generation
-export const generateVeoVideo = async (prompt: string, imageBase64?: string): Promise<any> => {
-    try {
-        const ai = getAi();
-        const videoPrompt = `A high quality, cinematic video suitable for children: ${prompt}`;
-
-        if (imageBase64) {
-            const mimeType = getMimeType(imageBase64);
-            const base64Data = imageBase64.split(',')[1] || imageBase64;
-            return await ai.models.generateVideos({
-                model: 'veo-3.1-fast-generate-preview',
-                prompt: videoPrompt,
-                image: { imageBytes: base64Data, mimeType: mimeType },
-                config: { numberOfVideos: 1, resolution: '720p', aspectRatio: '16:9' }
-            });
-        } else {
-            return await ai.models.generateVideos({
-                model: 'veo-3.1-fast-generate-preview',
-                prompt: videoPrompt,
-                config: { numberOfVideos: 1, resolution: '720p', aspectRatio: '16:9' }
-            });
+        for (const part of response.candidates?.[0]?.content?.parts || []) {
+            if (part.inlineData) {
+                return `data:image/png;base64,${part.inlineData.data}`;
+            }
         }
+        return null;
     } catch (error) {
-        console.error("Veo init error:", error);
-        throw error;
+        console.error("Edit image error:", error);
+        return null;
     }
-}
+};
 
-export const pollForVideo = async (operation: any): Promise<GeneratedVideo | null> => {
-    let currentOp = operation;
-    const ai = getAi();
-    const maxAttempts = 60; 
-    let attempts = 0;
-
-    while (!currentOp.done && attempts < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, 5000));
-        try {
-            currentOp = await ai.operations.getVideosOperation({ operation: currentOp });
-            attempts++;
-        } catch (e) { console.warn("Polling retry", e); }
-    }
-    
-    const uri = currentOp.response?.generatedVideos?.[0]?.video?.uri;
-    if (uri) {
-        return {
-            uri: `${uri}&key=${process.env.API_KEY}`,
-            mimeType: 'video/mp4'
-        };
-    }
-    return null;
-}
-
-// 10. Parent Insights Generation
-export const generateParentInsights = async (logs: ActivityLog[], settings: ParentSettings): Promise<string> => {
-    try {
-        const ai = getAi();
-        const logSummary = logs.map(l => `${l.category}: ${l.details}`).join('\n');
-        
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: `Analyze this activity log for a ${settings.childAge}-year-old named ${settings.childName}.
-            Logs:
-            ${logSummary}
-            
-            Provide a encouraging summary for the parent. Mention:
-            1. What topics the child loves most.
-            2. How they are developing (curiosity, creativity).
-            3. A suggestion for what to encourage next.
-            Keep it under 100 words. Be warm and professional.`,
-        });
-        return response.text || "Your child is exploring new topics every day!";
-    } catch (e) {
-        return "Not enough data yet for a full analysis, but your child is doing great!";
-    }
-}
-
-// 11. Library Generation
+// 6. Generate Library
 export const generateLibrary = async (settings?: ParentSettings): Promise<Book[]> => {
     try {
         const ai = getAi();
-        let prompt = "Generate 6 captivating, short story book titles for a child (3-7yo).";
-        if (settings) {
-            prompt += ` Incorporate interests: ${settings.focusTopics.join(', ')}.`;
-        }
-        prompt += ` For each book provide:
-        - title
-        - emoji (representing the book)
-        - color (a tailwind CSS color class like 'bg-red-500', 'bg-blue-400')
-        - description (super short 1 sentence)
-        `;
-
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: prompt,
+            contents: "Generate a list of 6 children's book titles with emoji, color (tailwind class like bg-red-500), and short description.",
             config: {
-                responseMimeType: "application/json",
+                responseMimeType: 'application/json',
                 responseSchema: {
                     type: Type.ARRAY,
                     items: {
                         type: Type.OBJECT,
                         properties: {
+                            id: { type: Type.STRING },
                             title: { type: Type.STRING },
                             emoji: { type: Type.STRING },
                             color: { type: Type.STRING },
-                            description: { type: Type.STRING },
+                            description: { type: Type.STRING }
                         }
                     }
                 }
             }
         });
-        const data = JSON.parse(response.text || '[]');
-        return data.map((b: any, i: number) => ({ ...b, id: `book-${i}` }));
+        const text = response.text;
+        if (text) return JSON.parse(text);
+        return [];
     } catch (e) {
-        return [{ id: '1', title: 'The Magic Star', emoji: '⭐', color: 'bg-yellow-400', description: 'A star that wanted to dance.' }];
+        return [];
     }
 }
 
-// 12. Story Generation
+// 7. Generate Story
 export const generateStory = async (title: string): Promise<Story> => {
     try {
         const ai = getAi();
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: `Write a captivating children's story for a 4-5 year old titled "${title}".
-            Length: Exactly 6 pages.
-            
-            Tone: Playful, rhythmic, simple words.
-            Features: 
-            - Use sound words (e.g. "Whoosh!", "Pop!", "Tip-tap").
-            - Include 1 interactive question for the child (e.g. "Can you spot the blue bird?").
-            
-            Structure:
-            1. 'coverPrompt': Cute, colorful 3D render book cover description.
-            2. 'pages': Array of 6 pages.
-               - 'text': Story text (approx 40-50 words per page). Use dialogue.
-               - 'imagePrompt': Highly recommended for EVERY page to keep engagement, but at least for pages 1, 3, 5.
-            `,
+            contents: `Write a short story for children titled "${title}". 5 pages.`,
             config: {
-                responseMimeType: "application/json",
+                responseMimeType: 'application/json',
                 responseSchema: {
                     type: Type.OBJECT,
                     properties: {
@@ -497,7 +290,7 @@ export const generateStory = async (title: string): Promise<Story> => {
                                 type: Type.OBJECT,
                                 properties: {
                                     text: { type: Type.STRING },
-                                    imagePrompt: { type: Type.STRING, nullable: true }
+                                    imagePrompt: { type: Type.STRING }
                                 }
                             }
                         }
@@ -505,136 +298,67 @@ export const generateStory = async (title: string): Promise<Story> => {
                 }
             }
         });
-        
-        return JSON.parse(response.text || '{}');
+        const text = response.text;
+        if (text) return JSON.parse(text);
+        throw new Error("No story generated");
     } catch (e) {
-        console.error("Story gen error", e);
-        // Fallback story
-        return {
-            title: title,
-            coverPrompt: `Book cover about ${title}`,
-            pages: [
-                { text: `Once upon a time, deep in a magical land, there was a story about ${title}. The sun was setting over the hills. Whoosh went the wind!`, imagePrompt: `Magical land about ${title}` },
-                { text: "It was a beautiful day. 'Hello!' said the little bunny. Can you wave hello too?", imagePrompt: "Cute bunny waving" },
-                { text: "Suddenly, a friendly breeze swept through the trees. Rustle, rustle. The leaves danced.", imagePrompt: "Trees dancing in wind" },
-                { text: "Everyone learned something new. Do you like learning new things?", imagePrompt: "Happy animals learning" },
-                { text: "As the stars appeared, they had a feast. Yummy! Crunch, munch.", imagePrompt: "Feast under moonlight" },
-                { text: "And they all lived happily ever after. The End.", imagePrompt: null }
-            ]
-        };
+        throw e;
     }
 }
 
-// 13. Floating Buddy Helper (Modified for Voice Interaction)
-export const getBuddyMessage = async (context: string, settings: ParentSettings | null, isVoiceQuery: boolean = false): Promise<string> => {
-    try {
+// 8. Prompt For Key (For Veo/Pro models)
+export const promptForKey = async () => {
+    if ((window as any).aistudio) {
+        await (window as any).aistudio.openSelectKey();
+    }
+}
+
+// 9. Chess Advice
+export const getChessAdvice = async (boardState: string): Promise<string> => {
+     try {
         const ai = getAi();
-        const name = settings?.childName || "Friend";
-        
-        // If it's a direct voice question, treat it like a conversation
-        const prompt = isVoiceQuery 
-            ? `You are Hoot, a friendly owl driving a flying car. 
-               The child (named ${name}) asked you: "${context}". 
-               Answer in 1 sentence. Be encouraging and fun.`
-            : `You are Hoot, a friendly owl driving a flying car. 
-               The child is currently looking at: "${context}".
-               Give a very short, super encouraging, 1-sentence tip or fun comment using the name "${name}".`;
-
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-lite',
-            contents: prompt
+            model: 'gemini-2.5-flash',
+            contents: `You are a chess coach for kids. Here is the board:\n${boardState}\nGive a hint for the white player. Keep it simple and encouraging. Max 2 sentences.`
         });
-        return response.text || `Hoot hoot! Doing great, ${name}!`;
-    } catch (e) {
-        return "You're doing great!";
-    }
+        return response.text || "Move your knights to the center!";
+     } catch(e) { return "Think about controlling the center!"; }
 }
 
-// 14. Activity Logger
-export const logActivity = (type: ActivityLog['type'], details: string, category: string) => {
-    const log: ActivityLog = {
-        id: Date.now().toString(),
-        type,
-        details,
-        timestamp: Date.now(),
-        category
-    };
-    
-    // Save to local storage for parent zone
-    const existing = localStorage.getItem('activity_logs');
-    const logs: ActivityLog[] = existing ? JSON.parse(existing) : [];
-    logs.unshift(log);
-    // Keep last 50
-    if (logs.length > 50) logs.pop();
-    localStorage.setItem('activity_logs', JSON.stringify(logs));
-}
-
-// 15. Chess Coach
-export const getChessAdvice = async (fen: string): Promise<string> => {
+// 10. Language Lesson
+export const generateLanguageLesson = async (language: string, difficulty: string): Promise<any> => {
     try {
         const ai = getAi();
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: `You are a chess coach for a 7-year-old. 
-            The current board state (simplified representation) is: 
-            ${fen}
-            
-            Suggest ONE simple, good move for White. Explain WHY in 1 very short, simple sentence. 
-            Don't use complex notation. Say things like "Move the knight to protect the king!"`
-        });
-        return response.text || "Try moving your pawns forward to control the center!";
-    } catch (e) {
-        return "Think about controlling the center of the board!";
-    }
-}
-
-// 16. Language Learning
-export const generateLanguageLesson = async (language: string, difficulty: 'Easy' | 'Medium'): Promise<any> => {
-    try {
-        const ai = getAi();
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: `Generate a single language learning card for a child learning ${language} (${difficulty} level).
-            Return JSON with:
-            - phrase (in ${language})
-            - translation (in English)
-            - pronunciation (phonetic guide)
-            - imagePrompt (cute visual description)
-            - voiceInstruction (what the AI assistant should say to the child, e.g. "Can you say 'Hola'?")
-            `,
+            contents: `Generate a simple word or phrase to learn in ${language} (${difficulty}).`,
             config: {
-                responseMimeType: "application/json",
+                responseMimeType: 'application/json',
                 responseSchema: {
                     type: Type.OBJECT,
                     properties: {
                         phrase: { type: Type.STRING },
-                        translation: { type: Type.STRING },
                         pronunciation: { type: Type.STRING },
-                        imagePrompt: { type: Type.STRING },
-                        voiceInstruction: { type: Type.STRING }
+                        translation: { type: Type.STRING },
+                        voiceInstruction: { type: Type.STRING },
+                        imagePrompt: { type: Type.STRING }
                     }
                 }
             }
         });
         return JSON.parse(response.text || '{}');
-    } catch (e) {
-        console.error(e);
-        return { phrase: 'Hola', translation: 'Hello', pronunciation: 'oh-la', imagePrompt: 'Waving hand', voiceInstruction: 'Say Hola!' };
-    }
+    } catch(e) { return null; }
 }
 
-export const checkPronunciation = async (target: string, spoken: string): Promise<any> => {
-     try {
+// 11. Check Pronunciation
+export const checkPronunciation = async (target: string, input: string): Promise<{correct: boolean, feedback: string}> => {
+    try {
         const ai = getAi();
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: `The child was asked to say "${target}". They said "${spoken}".
-            Is this close enough? Return JSON:
-            - correct (boolean)
-            - feedback (short, encouraging sentence for a 5 year old)
-            `,
+            contents: `Target phrase: "${target}". User said: "${input}". Is it close enough? Return JSON.`,
             config: {
-                responseMimeType: "application/json",
+                responseMimeType: 'application/json',
                 responseSchema: {
                     type: Type.OBJECT,
                     properties: {
@@ -644,68 +368,197 @@ export const checkPronunciation = async (target: string, spoken: string): Promis
                 }
             }
         });
-        return JSON.parse(response.text || '{}');
-     } catch (e) {
-         return { correct: true, feedback: "Good try!" };
-     }
+        return JSON.parse(response.text || '{"correct": false, "feedback": "Try again!"}');
+    } catch(e) { return {correct: false, feedback: "Error checking."}; }
 }
 
-// --- Helpers ---
-
-function decode(base64: string): Uint8Array {
-  const binaryString = atob(base64);
-  const len = binaryString.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes;
-}
-
-function createWavHeader(dataLength: number, sampleRate: number): Uint8Array {
-    const buffer = new ArrayBuffer(44);
-    const view = new DataView(buffer);
-    writeString(view, 0, 'RIFF');
-    view.setUint32(4, 36 + dataLength, true);
-    writeString(view, 8, 'WAVE');
-    writeString(view, 12, 'fmt ');
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true);
-    view.setUint16(22, 1, true);
-    view.setUint32(24, sampleRate, true);
-    view.setUint32(28, sampleRate * 2, true);
-    view.setUint16(32, 2, true);
-    view.setUint16(34, 16, true);
-    writeString(view, 36, 'data');
-    view.setUint32(40, dataLength, true);
-    return new Uint8Array(buffer);
-}
-  
-function writeString(view: DataView, offset: number, string: string) {
-    for (let i = 0; i < string.length; i++) {
-      view.setUint8(offset + i, string.charCodeAt(i));
-    }
-}
-
-export const getWavUrl = (pcmData: Uint8Array, sampleRate: number = 24000): string => {
-    const header = createWavHeader(pcmData.length, sampleRate);
-    const wavBlob = new Blob([header, pcmData], { type: 'audio/wav' });
-    return URL.createObjectURL(wavBlob);
-};
-
-export const hasApiKey = async (): Promise<boolean> => {
+// 12. Parent Insights
+export const generateParentInsights = async (logs: ActivityLog[], settings: ParentSettings): Promise<string> => {
     try {
-        const win = window as any;
-        if (win.aistudio && win.aistudio.hasSelectedApiKey) {
-            return await win.aistudio.hasSelectedApiKey();
-        }
-        return false;
-    } catch(e) { return false; }
+        const ai = getAi();
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: `Analyze these activity logs for child ${settings.childName} (age ${settings.childAge}): ${JSON.stringify(logs)}. Provide a short encouraging weekly summary for the parent.`
+        });
+        return response.text || "Your child is doing great!";
+    } catch(e) { return "Insights unavailable."; }
 }
 
-export const promptForKey = async (): Promise<void> => {
-    const win = window as any;
-    if (win.aistudio && win.aistudio.openSelectKey) {
-        await win.aistudio.openSelectKey();
+// 13. Learn Topics
+export const generateLearnTopics = async (settings?: ParentSettings): Promise<LearnVideo[]> => {
+     try {
+        const ai = getAi();
+        const age = settings?.childAge || 5;
+        // Default topics if none provided
+        const defaultTopics = "Science, Nature, Space, Kindness, Friendship";
+        const topicContext = settings?.focusTopics?.length 
+            ? `topics related to: ${settings.focusTopics.join(", ")}` 
+            : `general educational topics like ${defaultTopics}`;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: `Generate 4 engaging and age-appropriate video topics for a ${age}-year-old child. Focus on ${topicContext}. Make titles fun and catchy.`,
+            config: {
+                responseMimeType: 'application/json',
+                responseSchema: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            id: { type: Type.STRING },
+                            title: { type: Type.STRING },
+                            description: { type: Type.STRING },
+                            category: { type: Type.STRING }
+                        }
+                    }
+                }
+            }
+        });
+        const videos = JSON.parse(response.text || '[]');
+        return videos.map((v: any, i: number) => ({...v, id: `gen-${Date.now()}-${i}`}));
+    } catch(e) { return []; }
+}
+
+// 14. Related Topics
+export const generateRelatedTopics = async (topic: string): Promise<LearnVideo[]> => {
+    try {
+        const ai = getAi();
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: `Generate 3 related video topics for kids similar to: ${topic}.`,
+            config: {
+                responseMimeType: 'application/json',
+                responseSchema: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            id: { type: Type.STRING },
+                            title: { type: Type.STRING },
+                            description: { type: Type.STRING },
+                            category: { type: Type.STRING }
+                        }
+                    }
+                }
+            }
+        });
+        const videos = JSON.parse(response.text || '[]');
+        return videos.map((v: any, i: number) => ({...v, id: `rel-${Date.now()}-${i}`}));
+    } catch(e) { return []; }
+}
+
+// 15. Lesson Script
+export const generateLessonScript = async (topic: string): Promise<{script: string, visualPrompts: string[]}> => {
+    try {
+        const ai = getAi();
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: `Create a short educational script (max 100 words) about "${topic}" for a 5-year-old. Also provide 3 visual prompts for images to accompany the script.`,
+            config: {
+                responseMimeType: 'application/json',
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        script: { type: Type.STRING },
+                        visualPrompts: { type: Type.ARRAY, items: { type: Type.STRING } }
+                    }
+                }
+            }
+        });
+        return JSON.parse(response.text || '{}');
+    } catch(e) { return { script: "Learning is fun!", visualPrompts: [] }; }
+}
+
+// 16. Speech Generation
+export const generateSpeech = async (text: string): Promise<string> => {
+    try {
+        const ai = getAi();
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-preview-tts',
+            contents: { parts: [{ text }] },
+            config: {
+                responseModalities: [Modality.AUDIO],
+                speechConfig: {
+                    voiceConfig: {
+                        prebuiltVoiceConfig: { voiceName: 'Kore' }
+                    }
+                }
+            }
+        });
+        return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || '';
+    } catch(e) {
+        console.error("TTS Error", e);
+        return '';
     }
+}
+
+// 17. WAV URL Helper
+export const getWavUrl = (base64Pcm: string): string => {
+    if (!base64Pcm) return '';
+    try {
+        const binaryString = atob(base64Pcm);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        
+        // WAV Header for 24kHz Mono 16-bit
+        const wavHeader = new ArrayBuffer(44);
+        const view = new DataView(wavHeader);
+        const numChannels = 1;
+        const sampleRate = 24000;
+        const bitsPerSample = 16;
+        const subChunk2Size = len;
+        const chunkSize = 36 + subChunk2Size;
+        const byteRate = sampleRate * numChannels * bitsPerSample / 8;
+        const blockAlign = numChannels * bitsPerSample / 8;
+
+        const writeString = (view: DataView, offset: number, string: string) => {
+            for (let i = 0; i < string.length; i++) {
+                view.setUint8(offset + i, string.charCodeAt(i));
+            }
+        };
+
+        writeString(view, 0, 'RIFF');
+        view.setUint32(4, chunkSize, true);
+        writeString(view, 8, 'WAVE');
+        writeString(view, 12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, numChannels, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, byteRate, true);
+        view.setUint16(32, blockAlign, true);
+        view.setUint16(34, bitsPerSample, true);
+        writeString(view, 36, 'data');
+        view.setUint32(40, subChunk2Size, true);
+
+        const blob = new Blob([view, bytes], { type: 'audio/wav' });
+        return URL.createObjectURL(blob);
+    } catch (e) {
+        console.error("WAV conversion error", e);
+        return '';
+    }
+}
+
+// 18. Buddy Message
+export const getBuddyMessage = async (context: string | View, settings: ParentSettings | null, isVoice: boolean = false): Promise<string> => {
+     try {
+        const ai = getAi();
+        const prompt = isVoice 
+            ? `Child asks: "${context}". Answer briefly and kindly as a wise owl friend.`
+            : `User is on screen: ${context}. Give a 1-sentence helpful tip or fun fact for a child named ${settings?.childName || 'friend'}.`;
+            
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt
+        });
+        return response.text || "Hoot hoot!";
+    } catch(e) { return "I'm here to help!"; }
+}
+
+// 19. Log Activity
+export const logActivity = (type: string, details: string, category: string) => {
+    console.log(`[ACTIVITY] ${type}: ${details} (${category})`);
 }

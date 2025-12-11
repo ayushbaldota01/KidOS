@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { Layout } from './components/Layout';
 import { Feed } from './components/Feed';
@@ -10,6 +9,7 @@ import { LearnTV } from './components/LearnTV';
 import { WelcomeAnimation } from './components/WelcomeAnimation';
 import { FloatingBuddy } from './components/FloatingBuddy';
 import { View } from './types';
+import { IBLMProvider } from './context/IBLMContext';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>(View.FEED);
@@ -37,15 +37,17 @@ const App: React.FC = () => {
   };
 
   return (
-    <>
+    <IBLMProvider>
         {!welcomeComplete && <WelcomeAnimation onComplete={handleWelcomeComplete} />}
         
         <Layout currentView={currentView} onNavigate={setCurrentView}>
           {renderView()}
         </Layout>
         
-        {welcomeComplete && <FloatingBuddy currentView={currentView} />}
-    </>
+        {welcomeComplete && (
+            <FloatingBuddy currentView={currentView} />
+        )}
+    </IBLMProvider>
   );
 };
 
