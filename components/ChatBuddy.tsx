@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { askProfessor } from '../services/gemini';
 import { ChatMessage } from '../types';
-import { BrainIcon, SendIcon, SparklesIcon } from './Icons';
+import { BrainIcon, SendIcon, SparklesIcon, MicIcon } from './Icons';
 import { motion } from 'framer-motion';
 
 export const ChatBuddy: React.FC = () => {
@@ -11,7 +11,9 @@ export const ChatBuddy: React.FC = () => {
   ]);
   const [input, setInput] = useState('');
   const [isThinking, setIsThinking] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<any>(null);
 
   const scrollToBottom = () => {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -21,32 +23,65 @@ export const ChatBuddy: React.FC = () => {
     scrollToBottom();
   }, [messages, isThinking]);
 
-  const handleSend = async () => {
-    if (!input.trim()) return;
+  const handleSend = async (textOverride?: string) => {
+    const text = typeof textOverride === 'string' ? textOverride : input;
+    if (!text.trim()) return;
     
     // Guardian Check Logic - Internal Only
-    if (input.toLowerCase().includes('unsafe')) {
-        const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', text: input };
+    if (text.toLowerCase().includes('unsafe')) {
+        const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', text: text };
         const safetyMsg: ChatMessage = { id: (Date.now() + 1).toString(), role: 'model', text: "Let's talk about something else! 🛡️" };
         setMessages(prev => [...prev, userMsg, safetyMsg]);
-        setInput('');
+        if (!textOverride) setInput('');
         return;
     }
 
-    const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', text: input };
+    const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', text: text };
     setMessages(prev => [...prev, userMsg]);
-    setInput('');
+    if (!textOverride) setInput('');
     setIsThinking(true);
 
-    const { text, imageUrl } = await askProfessor(input);
+    const { text: responseText, imageUrl } = await askProfessor(text);
     
     setMessages(prev => [...prev, { 
         id: (Date.now() + 1).toString(), 
         role: 'model', 
-        text: text,
+        text: responseText,
         imageUrl: imageUrl || undefined
     }]);
     setIsThinking(false);
+  };
+
+  const toggleListening = () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+    } else {
+      if ('webkitSpeechRecognition' in window) {
+        const SpeechRecognition = (window as any).webkitSpeechRecognition;
+        recognitionRef.current = new SpeechRecognition();
+        recognitionRef.current.continuous = false;
+        recognitionRef.current.interimResults = false;
+        recognitionRef.current.lang = 'en-US';
+
+        recognitionRef.current.onstart = () => setIsListening(true);
+        recognitionRef.current.onend = () => setIsListening(false);
+        recognitionRef.current.onresult = (event: any) => {
+          const transcript = event.results[0][0].transcript;
+          if (transcript) {
+             handleSend(transcript);
+          }
+        };
+        recognitionRef.current.onerror = (event: any) => {
+             console.error("Speech error", event);
+             setIsListening(false);
+        };
+
+        recognitionRef.current.start();
+      } else {
+        alert("Voice input is not supported in this browser. Try Chrome!");
+      }
+    }
   };
 
   // Avatar Animation Logic
@@ -118,18 +153,27 @@ export const ChatBuddy: React.FC = () => {
 
       <div className="p-4 bg-white border-t border-indigo-100">
         <div className="flex gap-2 max-w-2xl mx-auto">
+          <motion.button 
+            whileTap={{ scale: 0.9 }}
+            onClick={toggleListening}
+            className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all ${isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-white text-indigo-600 border-2 border-indigo-100 hover:bg-indigo-50'}`}
+          >
+            <MicIcon className="w-6 h-6" />
+          </motion.button>
+
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="Ask a big question... (e.g. Why is grass green?)"
+            placeholder={isListening ? "Listening..." : "Ask a big question..."}
             className="flex-1 p-4 bg-gray-100 rounded-full border-2 border-transparent focus:border-indigo-400 focus:bg-white focus:outline-none text-lg transition-all"
+            disabled={isListening}
           />
           <motion.button 
             whileTap={{ scale: 0.9 }}
-            onClick={handleSend}
-            disabled={isThinking || !input.trim()}
+            onClick={() => handleSend()}
+            disabled={isThinking || (!input.trim() && !isListening)}
             className="w-14 h-14 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white rounded-full flex items-center justify-center shadow-lg transition-all"
           >
             <SendIcon className="w-6 h-6" />
