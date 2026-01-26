@@ -7,7 +7,7 @@
     <title>WonderNest</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-      @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;600;700&family=Nunito:wght@400;700;900&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;900&display=swap');
       
       :root {
         --sat: env(safe-area-inset-top);
@@ -18,25 +18,40 @@
 
       html, body, #root {
         height: 100%;
-        height: 100dvh; /* Dynamic viewport height for mobile browsers */
+        height: 100dvh;
         width: 100%;
         margin: 0;
         padding: 0;
-        overflow: hidden; /* Prevent body scroll, handle inside components */
-        overscroll-behavior-y: none; /* Prevent rubber banding */
-        -webkit-tap-highlight-color: transparent; /* Remove blue highlight on tap */
+        overflow: hidden;
+        overscroll-behavior-y: none;
+        -webkit-tap-highlight-color: transparent;
         touch-action: pan-x pan-y;
       }
 
       body {
         font-family: 'Nunito', sans-serif;
-        background-color: #f0f9ff;
+        background-color: #f8fafc;
+        color: #1e293b;
       }
-      h1, h2, h3, h4, button {
+
+      /* Eye-catchy Headings for Kids */
+      h1, h2, h3, h4, .font-kids {
         font-family: 'Fredoka', sans-serif;
+        letter-spacing: -0.01em;
+      }
+
+      /* Soft Shadow for readability on colorful backgrounds */
+      .text-glow {
+        text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      }
+
+      .bubbly-text {
+        font-family: 'Fredoka', sans-serif;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        line-height: 1.2;
       }
       
-      /* Hide scrollbar for clean UI but allow scrolling */
       .no-scrollbar::-webkit-scrollbar {
         display: none;
       }
@@ -44,6 +59,10 @@
         -ms-overflow-style: none;
         scrollbar-width: none;
       }
+
+      /* Age-specific dynamic scaling classes */
+      .child-text-sm { font-size: 1.1rem; }
+      .child-text-lg { font-size: 1.5rem; }
     </style>
   <script type="importmap">
 {

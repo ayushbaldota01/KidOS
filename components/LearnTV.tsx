@@ -2,9 +2,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { generateLearnTopics, generateRelatedTopics, generateImage, generateLessonScript, generateSpeech, getWavUrl, promptForKey } from '../services/gemini';
 import { LearnVideo, ImageSize, ParentSettings } from '../types';
-import { TvIcon, PlayIcon, PauseIcon, SparklesIcon, GlobeIcon } from './Icons';
+import { TvIcon, PlayIcon, PauseIcon, SparklesIcon, GlobeIcon, ShieldIcon, CheckIcon } from './Icons';
 import { VideoGridSkeleton } from './SkeletonLoader';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 type PlayerState = 'IDLE' | 'GENERATING' | 'READY' | 'PLAYING' | 'PAUSED' | 'ENDED' | 'ERROR';
 type ViewMode = 'AI' | 'DOCS';
@@ -15,6 +15,7 @@ interface Documentary {
     description: string;
     imageUrl: string;
     searchQuery: string;
+    learningGoal: string;
 }
 
 const REAL_DOCS: Documentary[] = [
@@ -23,52 +24,34 @@ const REAL_DOCS: Documentary[] = [
         title: 'March of the Penguins',
         description: 'Follow the amazing journey of emperor penguins in Antarctica.',
         imageUrl: 'https://images.unsplash.com/photo-1598439210625-5067c578f3f6?q=80&w=2072&auto=format&fit=crop',
-        searchQuery: 'March of the Penguins documentary for kids'
+        searchQuery: 'March of the Penguins documentary for kids',
+        learningGoal: 'Animal Life Cycles & Persistence'
     },
     {
         id: 'd2',
         title: 'A Beautiful Planet',
         description: 'Look at our home, Earth, from the International Space Station.',
         imageUrl: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop',
-        searchQuery: 'A Beautiful Planet IMAX documentary'
+        searchQuery: 'A Beautiful Planet IMAX documentary',
+        learningGoal: 'Geography & Astronomy'
     },
     {
         id: 'd3',
         title: 'Born to be Wild',
         description: 'Meet the people rescuing orphaned orangutans and elephants.',
         imageUrl: 'https://images.unsplash.com/photo-1557050543-4d5f4e07ef46?q=80&w=1932&auto=format&fit=crop',
-        searchQuery: 'Born to be Wild IMAX documentary'
-    },
-    {
-        id: 'd4',
-        title: 'Oceans',
-        description: 'Dive deep into the blue and meet the creatures of the sea.',
-        imageUrl: 'https://images.unsplash.com/photo-1582967788606-a171f1080ca8?q=80&w=2070&auto=format&fit=crop',
-        searchQuery: 'DisneyNature Oceans documentary'
-    },
-    {
-        id: 'd5',
-        title: 'Tiny Giants',
-        description: 'A day in the life of the smallest animals in the world.',
-        imageUrl: 'https://images.unsplash.com/photo-1452573992436-6d508f200830?q=80&w=2062&auto=format&fit=crop',
-        searchQuery: 'Tiny Giants BBC Earth'
-    },
-    {
-        id: 'd6',
-        title: 'Elephant Family',
-        description: 'Watch baby elephants learn and play with their families.',
-        imageUrl: 'https://images.unsplash.com/photo-1557050543-4d5f4e07ef46?q=80&w=1932&auto=format&fit=crop',
-        searchQuery: 'Elephant family documentary for kids'
+        searchQuery: 'Born to be Wild IMAX documentary',
+        learningGoal: 'Animal Conservation & Empathy'
     }
 ];
 
 // --- Memoized Components ---
-const VideoItem = React.memo(({ video, onClick }: { video: LearnVideo, onClick: (v: LearnVideo) => void }) => (
+const VideoItem = React.memo(({ video, onClick, isChildFriendly }: { video: LearnVideo, onClick: (v: LearnVideo) => void, isChildFriendly: boolean }) => (
     <motion.div 
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         onClick={() => onClick(video)} 
-        className="bg-slate-900 rounded-2xl overflow-hidden cursor-pointer shadow-lg group border border-slate-800"
+        className="bg-slate-900 rounded-[2rem] overflow-hidden cursor-pointer shadow-lg group border-2 border-slate-800 hover:border-red-500 transition-all"
     >
         <div className="aspect-video bg-slate-800 relative overflow-hidden">
             {video.thumbnailUrl ? (
@@ -80,32 +63,9 @@ const VideoItem = React.memo(({ video, onClick }: { video: LearnVideo, onClick: 
                 <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-xl transform scale-0 group-hover:scale-100 transition-transform"><PlayIcon className="w-5 h-5 text-black ml-1" /></div>
             </div>
         </div>
-        <div className="p-4">
-            <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-1 block">{video.category}</span>
-            <h3 className="text-lg font-bold leading-tight mb-2 text-slate-100">{video.title}</h3>
-        </div>
-    </motion.div>
-));
-
-const DocItem = React.memo(({ doc, onClick }: { doc: Documentary, onClick: (d: Documentary) => void }) => (
-    <motion.div 
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
-        onClick={() => onClick(doc)} 
-        className="bg-slate-900 rounded-2xl overflow-hidden cursor-pointer shadow-lg group border border-slate-800"
-    >
-        <div className="aspect-[16/10] bg-slate-800 relative">
-            <img src={doc.imageUrl} className="w-full h-full object-cover" alt={doc.title} />
-            <div className="absolute top-2 right-2 bg-black/60 text-white text-[10px] font-bold px-2 py-1 rounded-md backdrop-blur-md">REAL DOC</div>
-            <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors flex items-center justify-center">
-                <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center group-hover:scale-110 transition-transform border-2 border-white/50">
-                    <PlayIcon className="w-6 h-6 text-white ml-1" />
-                </div>
-            </div>
-        </div>
         <div className="p-5">
-            <h3 className="text-xl font-bold text-white mb-2">{doc.title}</h3>
-            <p className="text-slate-400 text-sm leading-relaxed">{doc.description}</p>
+            <span className="text-[10px] font-black text-red-400 uppercase tracking-[0.1em] mb-1 block bubbly-text">{video.category}</span>
+            <h3 className={`font-black leading-tight mb-2 text-slate-100 bubbly-text ${isChildFriendly ? 'text-xl' : 'text-lg'}`}>{video.title}</h3>
         </div>
     </motion.div>
 ));
@@ -127,40 +87,62 @@ export const LearnTV: React.FC = () => {
   const [duration, setDuration] = useState(0);
   const [needsKey, setNeedsKey] = useState(false);
   
-  // Recommendations State
+  // Recommendations & Pre-fetching State
   const [showRecs, setShowRecs] = useState(false);
   const [relatedVideos, setRelatedVideos] = useState<LearnVideo[]>([]);
   const [loadingRecs, setLoadingRecs] = useState(false);
+  const prefetchQueue = useRef<Set<string>>(new Set());
 
   // Refs
   const audioRef = useRef<HTMLAudioElement>(null);
+  const [settings, setSettings] = useState<ParentSettings | null>(null);
 
   useEffect(() => {
+    const saved = localStorage.getItem('parent_settings');
+    if (saved) setSettings(JSON.parse(saved));
+
     let mounted = true;
     const initFeed = async () => {
       setLoading(true);
-      const savedSettings = localStorage.getItem('parent_settings');
-      const settings: ParentSettings | undefined = savedSettings ? JSON.parse(savedSettings) : undefined;
+      const settingsObj: ParentSettings | undefined = saved ? JSON.parse(saved) : undefined;
 
       try {
-        const topics = await generateLearnTopics(settings);
+        const topics = await generateLearnTopics(settingsObj);
         if (mounted) setVideos(topics);
         
-        for (let i = 0; i < topics.length; i++) {
-           if (!mounted) break;
-           try {
-               const img = await generateImage(`${topics[i].title} - cute 3d render`, ImageSize.S_1K, 'gemini-2.5-flash-image');
-               if (img && mounted) {
-                   setVideos(prev => prev.map(v => v.id === topics[i].id ? { ...v, thumbnailUrl: img } : v));
-               }
-           } catch (e) {}
-        }
+        // Background pre-fetch thumbnails for initial list
+        topics.forEach(async (topic) => {
+            if (!mounted) return;
+            try {
+                const img = await generateImage(`${topic.title} - cute 3d render for kids`, ImageSize.S_1K, 'gemini-2.5-flash-image');
+                if (img && mounted) {
+                    setVideos(prev => prev.map(v => v.id === topic.id ? { ...v, thumbnailUrl: img } : v));
+                }
+            } catch (e) {}
+        });
       } catch (e) { console.error("Failed to init TV", e); }
       if (mounted) setLoading(false);
     };
     initFeed();
     return () => { mounted = false; if (audioUrl) URL.revokeObjectURL(audioUrl); }
   }, []);
+
+  // --- PRE-FETCHING LOGIC ---
+  useEffect(() => {
+    // When a video starts playing, pre-fetch images for related videos
+    if (playerState === 'PLAYING' && relatedVideos.length > 0) {
+        relatedVideos.forEach(async (video) => {
+            if (prefetchQueue.current.has(video.id) || video.thumbnailUrl) return;
+            prefetchQueue.current.add(video.id);
+            try {
+                const img = await generateImage(`${video.title} - bright kids 3d illustration`, ImageSize.S_1K, 'gemini-2.5-flash-image');
+                if (img) {
+                    setRelatedVideos(prev => prev.map(v => v.id === video.id ? { ...v, thumbnailUrl: img } : v));
+                }
+            } catch (e) { prefetchQueue.current.delete(video.id); }
+        });
+    }
+  }, [playerState, relatedVideos]);
 
   useEffect(() => {
     if (activeVideo?.slideImages && activeVideo.slideImages.length > 0 && duration > 0) {
@@ -203,6 +185,9 @@ export const LearnTV: React.FC = () => {
         setAudioUrl(url);
         setPlayerState('READY');
         setGenerationStep('');
+        
+        // Start loading related topics in background while user is READY
+        loadRecommendations(video.title);
     } catch (e: any) {
         if (e.toString().includes('403') || e.toString().includes('permission')) { setNeedsKey(true); setPlayerState('ERROR'); } 
         else { alert("Something went wrong."); closePlayer(); }
@@ -213,7 +198,7 @@ export const LearnTV: React.FC = () => {
 
   const handlePlayFromReady = () => { if (audioRef.current) audioRef.current.play().then(() => setPlayerState('PLAYING')); else setPlayerState('PLAYING'); };
 
-  const handleVideoEnd = async () => { setPlayerState('ENDED'); setShowRecs(true); if (activeVideo) loadRecommendations(activeVideo.title); };
+  const handleVideoEnd = async () => { setPlayerState('ENDED'); setShowRecs(true); };
 
   const loadRecommendations = async (currentTopic: string) => {
       setLoadingRecs(true);
@@ -221,13 +206,6 @@ export const LearnTV: React.FC = () => {
           const recs = await generateRelatedTopics(currentTopic);
           setRelatedVideos(recs);
           setLoadingRecs(false);
-          for (let i = 0; i < recs.length; i++) {
-            if (!showRecs) break; 
-            try {
-                const img = await generateImage(`${recs[i].title} - cute 3d render`, ImageSize.S_1K, 'gemini-2.5-flash-image');
-                if (img) setRelatedVideos(prev => prev.map(v => v.id === recs[i].id ? { ...v, thumbnailUrl: img } : v));
-            } catch (e) {}
-         }
       } catch (e) { setLoadingRecs(false); }
   };
 
@@ -238,16 +216,18 @@ export const LearnTV: React.FC = () => {
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => { const time = parseFloat(e.target.value); if (audioRef.current) { audioRef.current.currentTime = time; setCurrentTime(time); } };
 
   const handleDocClick = useCallback((doc: Documentary) => {
-      // Open safe search for documentary
       window.open(`https://www.google.com/search?q=${encodeURIComponent(doc.searchQuery)}&tbm=vid`, '_blank');
   }, []);
 
+  const isYoungChild = settings ? settings.childAge <= 4 : false;
+
   return (
     <div className="h-full bg-slate-950 text-white flex flex-col relative overflow-hidden font-sans">
+      {/* Dynamic Font Header */}
       <div className="p-4 bg-slate-900 shadow-xl flex items-center justify-between z-10 border-b border-slate-800">
         <div className="flex items-center gap-3">
-             <div className="p-2 bg-red-600 rounded-lg"><TvIcon className="w-6 h-6 text-white" /></div>
-             <h1 className="text-xl font-black tracking-tight flex items-center gap-2">WonderTV <span className="text-[10px] font-bold text-slate-950 bg-yellow-400 px-2 py-0.5 rounded-full">KIDS</span></h1>
+             <div className="p-2 bg-red-600 rounded-2xl shadow-lg shadow-red-500/20"><TvIcon className="w-6 h-6 text-white" /></div>
+             <h1 className={`font-black tracking-tight flex items-center gap-2 bubbly-text ${isYoungChild ? 'text-2xl' : 'text-xl'}`}>WonderTV <span className="text-[10px] font-black text-slate-950 bg-yellow-400 px-2 py-0.5 rounded-full shadow-sm">KIDS</span></h1>
         </div>
         <div className="flex bg-slate-800 p-1 rounded-full">
             <button onClick={() => setViewMode('AI')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${viewMode === 'AI' ? 'bg-red-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}>AI Magic</button>
@@ -255,18 +235,18 @@ export const LearnTV: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 pb-24">
+      <div className="flex-1 overflow-y-auto p-6 pb-24 no-scrollbar">
         {viewMode === 'AI' && (
             <>
                 {loading && videos.length === 0 ? (
                    <VideoGridSkeleton />
                 ) : (
-                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
+                    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4">
                         {videos.length > 0 && (
                             <motion.div 
                                 whileTap={{ scale: 0.98 }}
                                 onClick={() => handleStartGeneration(videos[0])} 
-                                className="relative h-64 md:h-80 w-full rounded-3xl overflow-hidden shadow-2xl cursor-pointer group ring-4 ring-transparent hover:ring-red-500 transition-all"
+                                className="relative h-72 md:h-96 w-full rounded-[2.5rem] overflow-hidden shadow-2xl cursor-pointer group ring-4 ring-transparent hover:ring-red-500 transition-all border-4 border-slate-900"
                             >
                                 {videos[0].thumbnailUrl ? (
                                     <img src={videos[0].thumbnailUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
@@ -274,17 +254,17 @@ export const LearnTV: React.FC = () => {
                                     <div className="w-full h-full bg-slate-800 flex items-center justify-center"><SparklesIcon className="w-12 h-12 opacity-20" /></div>
                                 )}
                                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent"></div>
-                                <div className="absolute bottom-0 left-0 p-6 md:p-8 w-full">
-                                    <span className="bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-md mb-2 inline-block shadow-sm">FEATURED</span>
-                                    <h2 className="text-3xl md:text-4xl font-black mb-2 leading-tight drop-shadow-lg">{videos[0].title}</h2>
-                                    <p className="text-slate-200 line-clamp-1 opacity-90">{videos[0].description}</p>
-                                    <div className="mt-4 flex items-center gap-2 text-sm font-bold text-white/80"><PlayIcon className="w-5 h-5 fill-current" /><span>Tap to Watch</span></div>
+                                <div className="absolute bottom-0 left-0 p-8 w-full">
+                                    <span className="bg-red-600 text-white text-[10px] font-black px-3 py-1.5 rounded-full mb-3 inline-block shadow-lg bubbly-text tracking-widest">NEXT EPISODE</span>
+                                    <h2 className={`font-black mb-2 leading-tight drop-shadow-xl bubbly-text ${isYoungChild ? 'text-4xl' : 'text-3xl'}`}>{videos[0].title}</h2>
+                                    <p className="text-slate-200 line-clamp-2 opacity-90 text-lg font-medium max-w-xl">{videos[0].description}</p>
+                                    <div className="mt-6 flex items-center gap-3 text-lg font-black text-white bg-white/10 w-fit px-6 py-2 rounded-full backdrop-blur-md border border-white/20"><PlayIcon className="w-5 h-5 fill-current" /><span>Watch Now!</span></div>
                                 </div>
                             </motion.div>
                         )}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                             {videos.slice(1).map((video) => (
-                                <VideoItem key={video.id} video={video} onClick={handleStartGeneration} />
+                                <VideoItem key={video.id} video={video} onClick={handleStartGeneration} isChildFriendly={isYoungChild} />
                             ))}
                         </div>
                     </div>
@@ -293,34 +273,68 @@ export const LearnTV: React.FC = () => {
         )}
 
         {viewMode === 'DOCS' && (
-             <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-                 <div className="bg-blue-900/30 border border-blue-500/30 p-6 rounded-2xl flex items-center gap-4">
-                     <div className="p-3 bg-blue-500 rounded-full"><GlobeIcon className="w-6 h-6 text-white"/></div>
-                     <div>
-                         <h2 className="text-xl font-bold text-blue-100">Real World Explorers</h2>
-                         <p className="text-blue-200/60 text-sm">Hand-picked, safe documentaries about our amazing planet.</p>
+             <div className="space-y-8 animate-in fade-in slide-in-from-right-4 max-w-5xl mx-auto">
+                 <div className="bg-gradient-to-r from-blue-900/40 to-indigo-900/40 border border-blue-500/30 p-8 rounded-[2.5rem] flex flex-col md:flex-row items-center gap-6 shadow-2xl">
+                     <div className="p-5 bg-blue-500 rounded-3xl shadow-lg shadow-blue-500/40"><GlobeIcon className="w-10 h-10 text-white"/></div>
+                     <div className="text-center md:text-left">
+                         <h2 className="text-2xl font-black text-white bubbly-text mb-1">Explorer Theater</h2>
+                         <p className="text-blue-200/80 text-lg font-medium leading-snug">We found some amazing real-world movies just for you!</p>
                      </div>
                  </div>
 
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                      {REAL_DOCS.map((doc) => (
-                         <DocItem key={doc.id} doc={doc} onClick={handleDocClick} />
+                         <motion.div 
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            key={doc.id}
+                            onClick={() => handleDocClick(doc)}
+                            className="bg-slate-900 rounded-[2.5rem] overflow-hidden cursor-pointer shadow-xl border-2 border-slate-800 hover:border-blue-500 group flex flex-col"
+                         >
+                            <div className="aspect-video relative overflow-hidden">
+                                <img src={doc.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt={doc.title} />
+                                <div className="absolute top-4 left-4 bg-blue-600 text-white text-[10px] font-black px-3 py-1.5 rounded-full shadow-lg bubbly-text tracking-widest">REAL MOVIE</div>
+                                <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+                                    <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center group-hover:scale-110 transition-transform border-4 border-white/50 shadow-2xl">
+                                        <PlayIcon className="w-8 h-8 text-white ml-1" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="p-8 flex-1 flex flex-col">
+                                <h3 className="text-2xl font-black text-white bubbly-text mb-2">{doc.title}</h3>
+                                <p className="text-slate-400 text-lg font-medium mb-6 leading-relaxed flex-1">{doc.description}</p>
+                                
+                                <div className="mt-auto pt-6 border-t border-slate-800 flex flex-col gap-3">
+                                    <div className="flex items-center gap-2 text-sm font-bold text-blue-400 bg-blue-400/10 w-fit px-4 py-1 rounded-full">
+                                        <ShieldIcon className="w-4 h-4" /> Learning: {doc.learningGoal}
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs font-black text-green-400 uppercase tracking-widest">
+                                        <CheckIcon className="w-4 h-4" /> Parent Verified Safe Content
+                                    </div>
+                                </div>
+                            </div>
+                         </motion.div>
                      ))}
                  </div>
              </div>
         )}
       </div>
 
-      {/* Video Player Modal (Reuse logic from previous step, only show for AI videos) */}
+      <AnimatePresence>
       {activeVideo && (
-          <div className="absolute inset-0 bg-black z-50 flex flex-col animate-in slide-in-from-bottom duration-500">
+          <motion.div 
+            initial={{ opacity: 0, y: 100 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 100 }}
+            className="fixed inset-0 bg-black z-50 flex flex-col"
+          >
               {audioUrl && (
                   <audio ref={audioRef} src={audioUrl} onTimeUpdate={() => { if(audioRef.current) setCurrentTime(audioRef.current.currentTime); }} onLoadedMetadata={() => { if(audioRef.current) setDuration(audioRef.current.duration); }} onEnded={handleVideoEnd} />
               )}
               
-              <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-20 bg-gradient-to-b from-black/80 to-transparent">
-                  <button onClick={closePlayer} className="text-white bg-white/10 hover:bg-white/20 p-2 rounded-full backdrop-blur-md transition-colors">
-                      <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-20 bg-gradient-to-b from-black/80 to-transparent">
+                  <button onClick={closePlayer} className="text-white bg-white/10 hover:bg-white/20 w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-md transition-colors border border-white/10">
+                      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
               </div>
 
@@ -331,51 +345,75 @@ export const LearnTV: React.FC = () => {
                         ) : (
                              activeVideo.thumbnailUrl && <img src={activeVideo.thumbnailUrl} className="w-full h-full object-cover opacity-50 blur-sm" />
                         )}
-                        <div className="absolute inset-0 bg-black/30"></div>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20"></div>
                   </div>
 
                   {playerState === 'ERROR' && needsKey && (
-                      <div className="z-30 p-8 bg-slate-900 rounded-2xl border border-slate-700 max-w-sm text-center shadow-2xl">
-                          <h3 className="text-xl font-bold mb-2">Unlock Magic ✨</h3>
-                          <p className="text-slate-400 mb-6">Connect your Google Cloud account to generate magic videos.</p>
-                          <button onClick={connectAccount} className="w-full py-3 bg-red-600 hover:bg-red-700 rounded-xl font-bold text-white mb-3">Connect Account</button>
-                          <button onClick={closePlayer} className="text-slate-500 text-sm hover:text-white">Cancel</button>
+                      <div className="z-30 p-10 bg-slate-900 rounded-[2.5rem] border-4 border-slate-800 max-w-sm text-center shadow-2xl">
+                          <div className="w-16 h-16 bg-red-600 rounded-3xl mx-auto mb-6 flex items-center justify-center shadow-lg"><ShieldIcon className="w-10 h-10 text-white"/></div>
+                          <h3 className="text-2xl font-black mb-3 bubbly-text">Unlock Magic ✨</h3>
+                          <p className="text-slate-400 mb-8 text-lg font-medium">Ask a parent to connect their account to watch AI movies.</p>
+                          <button onClick={connectAccount} className="w-full py-5 bg-red-600 hover:bg-red-700 rounded-2xl font-black text-xl text-white mb-4 shadow-xl active:scale-95 transition-all">Connect Now</button>
+                          <button onClick={closePlayer} className="text-slate-500 font-black hover:text-white uppercase tracking-widest text-xs">Back to TV</button>
                       </div>
                   )}
 
                   {playerState === 'GENERATING' && (
-                      <div className="text-center z-10 p-8">
-                          <div className="w-20 h-20 border-4 border-red-600 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
-                          <h2 className="font-bold text-2xl text-white mb-2">{activeVideo.title}</h2>
-                          <p className="text-slate-400 animate-pulse">{generationStep}</p>
+                      <div className="text-center z-10 p-8 max-w-md">
+                          <div className="relative w-32 h-32 mx-auto mb-8">
+                               <div className="absolute inset-0 border-[6px] border-red-600/20 rounded-full"></div>
+                               <div className="absolute inset-0 border-[6px] border-red-600 border-t-transparent rounded-full animate-spin"></div>
+                               <div className="absolute inset-0 flex items-center justify-center"><TvIcon className="w-12 h-12 text-red-500"/></div>
+                          </div>
+                          <h2 className="font-black text-3xl text-white mb-3 bubbly-text">{activeVideo.title}</h2>
+                          <div className="bg-white/10 backdrop-blur-md rounded-2xl py-3 px-6 border border-white/20">
+                               <p className="text-white font-black animate-pulse uppercase tracking-[0.2em] text-[10px]">{generationStep}</p>
+                          </div>
                       </div>
                   )}
 
                   {playerState === 'READY' && (
-                      <div className="z-10 flex flex-col items-center animate-bounce-in">
+                      <div className="z-10 flex flex-col items-center">
                            <motion.button 
+                                initial={{ scale: 0, rotate: -45 }}
+                                animate={{ scale: 1, rotate: 0 }}
+                                transition={{ type: 'spring', damping: 12 }}
                                 whileTap={{ scale: 0.9 }}
                                 whileHover={{ scale: 1.1 }}
                                 onClick={handlePlayFromReady} 
-                                className="w-24 h-24 bg-red-600 hover:bg-red-700 text-white rounded-full flex items-center justify-center shadow-[0_0_40px_rgba(220,38,38,0.6)]"
+                                className="w-32 h-32 bg-red-600 hover:bg-red-700 text-white rounded-full flex items-center justify-center shadow-[0_0_60px_rgba(220,38,38,0.5)] border-4 border-white"
                             >
-                               <PlayIcon className="w-10 h-10 ml-2" />
+                               <PlayIcon className="w-12 h-12 ml-2" />
                            </motion.button>
-                           <h2 className="mt-6 text-2xl font-black text-white">Tap to Watch!</h2>
+                           <h2 className="mt-8 text-3xl font-black text-white bubbly-text drop-shadow-lg">Let's Watch!</h2>
                       </div>
                   )}
 
                   {(playerState === 'PLAYING' || playerState === 'PAUSED') && !showRecs && (
-                        <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black via-black/80 to-transparent transition-opacity duration-300 opacity-100 md:opacity-0 group-hover:opacity-100 z-30">
-                            <div className="max-w-3xl mx-auto space-y-4">
-                                <div className="flex items-center gap-3 text-xs font-bold font-mono text-slate-400">
-                                    <span>{Math.floor(currentTime / 60)}:{Math.floor(currentTime % 60).toString().padStart(2, '0')}</span>
-                                    <input type="range" min={0} max={duration || 100} value={currentTime} onChange={handleSeek} className="flex-1 h-1.5 bg-slate-600 rounded-full appearance-none cursor-pointer accent-red-600 hover:accent-red-500" />
-                                    <span>{Math.floor(duration / 60)}:{Math.floor(duration % 60).toString().padStart(2, '0')}</span>
+                        <div className="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-black via-black/80 to-transparent transition-opacity duration-300 opacity-100 md:opacity-0 group-hover:opacity-100 z-30">
+                            <div className="max-w-4xl mx-auto space-y-6">
+                                <div className="flex items-center gap-4">
+                                    <span className="text-xs font-black text-white/60 tracking-widest">
+                                        {Math.floor(currentTime / 60)}:{Math.floor(currentTime % 60).toString().padStart(2, '0')}
+                                    </span>
+                                    <div className="flex-1 relative h-2 group/slider">
+                                        <input 
+                                            type="range" 
+                                            min={0} 
+                                            max={duration || 100} 
+                                            value={currentTime} 
+                                            onChange={handleSeek} 
+                                            className="absolute inset-0 w-full h-full bg-slate-800 rounded-full appearance-none cursor-pointer accent-red-600 z-10" 
+                                        />
+                                        <div className="absolute left-0 top-0 h-full bg-red-600 rounded-full pointer-events-none" style={{ width: `${(currentTime/duration)*100}%` }}></div>
+                                    </div>
+                                    <span className="text-xs font-black text-white/60 tracking-widest">
+                                        {Math.floor(duration / 60)}:{Math.floor(duration % 60).toString().padStart(2, '0')}
+                                    </span>
                                 </div>
-                                <div className="flex items-center justify-between">
-                                    <button onClick={togglePlay} className="w-12 h-12 bg-white text-black rounded-full flex items-center justify-center hover:scale-105 transition-transform">
-                                        {playerState === 'PLAYING' ? <PauseIcon className="w-5 h-5" /> : <PlayIcon className="w-5 h-5 ml-1" />}
+                                <div className="flex items-center justify-center">
+                                    <button onClick={togglePlay} className="w-16 h-16 bg-white text-black rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-xl">
+                                        {playerState === 'PLAYING' ? <PauseIcon className="w-7 h-7" /> : <PlayIcon className="w-7 h-7 ml-1" />}
                                     </button>
                                 </div>
                             </div>
@@ -383,34 +421,44 @@ export const LearnTV: React.FC = () => {
                    )}
 
                   {showRecs && (
-                      <div className="relative z-40 w-full h-full p-8 flex flex-col items-center justify-center overflow-y-auto animate-in fade-in duration-500 bg-black/90 backdrop-blur-md">
-                          <h3 className="text-2xl font-bold mb-8 text-white">More Like This</h3>
-                          {loadingRecs ? (
-                              <div className="flex flex-col items-center gap-2"><SparklesIcon className="w-8 h-8 animate-spin text-blue-400" /><p className="text-sm text-slate-300">Finding cool videos...</p></div>
-                          ) : (
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl">
-                                  {relatedVideos.map((video) => (
-                                      <motion.div 
-                                        whileTap={{ scale: 0.95 }}
-                                        key={video.id} 
-                                        onClick={() => handleStartGeneration(video)} 
-                                        className="bg-slate-800/80 backdrop-blur-md rounded-2xl overflow-hidden cursor-pointer hover:bg-slate-700 transition-all border border-slate-700"
-                                      >
-                                          <div className="aspect-video bg-slate-900 relative">
-                                              {video.thumbnailUrl && <img src={video.thumbnailUrl} alt={video.title} className="w-full h-full object-cover" />}
-                                              <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black/40"><PlayIcon className="w-10 h-10 text-white" /></div>
-                                          </div>
-                                          <div className="p-4"><h4 className="font-bold text-white leading-snug mb-1">{video.title}</h4></div>
-                                      </motion.div>
-                                  ))}
-                              </div>
-                          )}
-                          <button onClick={closePlayer} className="mt-12 px-8 py-3 bg-white/10 hover:bg-white/20 rounded-full font-bold text-white transition-colors">Back to Home</button>
+                      <div className="relative z-40 w-full h-full p-8 flex flex-col items-center justify-center overflow-hidden animate-in fade-in duration-500 bg-black/90 backdrop-blur-xl">
+                          <h3 className="text-3xl font-black mb-10 text-white bubbly-text">What's Next?</h3>
+                          <div className="w-full max-w-5xl overflow-x-auto no-scrollbar pb-8 px-4 flex gap-8">
+                                {loadingRecs ? (
+                                    <div className="w-full h-48 flex flex-col items-center justify-center gap-4">
+                                        <SparklesIcon className="w-12 h-12 animate-spin text-red-500" />
+                                        <p className="font-black text-slate-400 uppercase tracking-widest text-sm">Finding more movies...</p>
+                                    </div>
+                                ) : (
+                                    relatedVideos.map((video) => (
+                                        <motion.div 
+                                            whileTap={{ scale: 0.95 }}
+                                            key={video.id} 
+                                            onClick={() => handleStartGeneration(video)} 
+                                            className="flex-shrink-0 w-72 bg-slate-900 rounded-[2.5rem] overflow-hidden cursor-pointer border-2 border-slate-800 hover:border-red-500 transition-all shadow-2xl"
+                                        >
+                                            <div className="aspect-video bg-slate-950 relative">
+                                                {video.thumbnailUrl && <img src={video.thumbnailUrl} alt={video.title} className="w-full h-full object-cover" />}
+                                                <div className="absolute inset-0 flex items-center justify-center bg-black/40 group-hover:bg-black/20 transition-all">
+                                                    <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border-2 border-white/50">
+                                                        <PlayIcon className="w-6 h-6 text-white ml-1" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="p-6">
+                                                <h4 className="font-black text-white text-xl bubbly-text line-clamp-2 leading-tight">{video.title}</h4>
+                                            </div>
+                                        </motion.div>
+                                    ))
+                                )}
+                          </div>
+                          <button onClick={closePlayer} className="mt-8 px-10 py-4 bg-white/10 hover:bg-white/20 rounded-full font-black text-white transition-all border border-white/20 uppercase tracking-[0.2em] text-xs">Back to TV</button>
                       </div>
                   )}
               </div>
-          </div>
+          </motion.div>
       )}
+      </AnimatePresence>
     </div>
   );
 };
