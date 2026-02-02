@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { useIBLM, ContentRecommendation } from '../context/IBLMContext';
-import { BrainIcon, ActivityIcon, AlertTriangleIcon } from 'lucide-react'; // Using lucide for icons in HUD if available, else generic svgs
 
 // Simple Icons for the HUD to avoid dependency issues if Lucide isn't installed in environment
 const Activity = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>;
@@ -9,7 +8,7 @@ const Brain = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" 
 const Alert = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
 
 export const DebugHUD: React.FC = () => {
-    const { metrics, decideNextContent, resetMetrics, forceFrustration } = useIBLM();
+    const { metrics, decideNextContent, resetMetrics, reportFrustration } = useIBLM();
     const [isOpen, setIsOpen] = useState(false);
     const [recommendation, setRecommendation] = useState<ContentRecommendation | null>(null);
 
@@ -88,7 +87,7 @@ export const DebugHUD: React.FC = () => {
             {/* Controls */}
             <div className="grid grid-cols-2 gap-2">
                 <button 
-                    onClick={forceFrustration}
+                    onClick={() => reportFrustration(2)}
                     className="bg-red-900/20 hover:bg-red-900/40 text-red-400 border border-red-500/30 py-2 rounded transition-colors text-center"
                 >
                     + STRESS TEST

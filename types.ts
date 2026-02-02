@@ -1,4 +1,5 @@
 
+
 export enum View {
   FEED = 'FEED',
   GAMES = 'GAMES',
@@ -19,7 +20,7 @@ export interface ParentSettings {
   pin: string;
   childName: string;
   childAge: number;
-  focusTopics: string[]; // Topics parent wants to encourage
+  focusTopics: string[];
   avatarName?: string;
   hasSeenTutorial?: boolean;
 }
@@ -40,19 +41,14 @@ export interface ChatMessage {
   isThinking?: boolean;
 }
 
-export interface GroundingChunk {
-  web?: {
-    uri?: string;
-    title?: string;
-  };
-}
-
 export interface FeedItem {
   id: string;
   title: string;
   fact: string;
   imageUrl: string;
   topic: string;
+  hydrationStatus: 'EMPTY' | 'HYDRATED' | 'READY';
+  predictedPath?: string; // Which track this belongs to
 }
 
 export interface Book {
@@ -77,10 +73,17 @@ export interface LearnVideo {
   category: string;
   script?: string;
   visualPrompts?: string[];
-  slideImages?: string[]; // Array of generated image URLs for the slideshow
+  slideImages?: string[];
 }
 
-export interface GeneratedVideo {
-  uri: string;
-  mimeType: string;
+// Added GroundingChunk interface for search results grounding integration
+export interface GroundingChunk {
+  web?: {
+    uri: string;
+    title: string;
+  };
+  maps?: {
+    uri: string;
+    title: string;
+  };
 }

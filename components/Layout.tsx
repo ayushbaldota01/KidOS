@@ -27,7 +27,7 @@ export const Layout: React.FC<LayoutProps> = ({ currentView, onNavigate, childre
           }
         `}>
           <div className={`${isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-600'}`}>
-            {React.cloneElement(icon as React.ReactElement, { 
+            {React.isValidElement(icon) && React.cloneElement(icon as React.ReactElement<any>, { 
               className: `w-7 h-7 stroke-[2.5px] ${isActive ? 'animate-bounce-short' : ''}` 
             })}
           </div>
